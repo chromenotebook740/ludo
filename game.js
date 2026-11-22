@@ -54,7 +54,6 @@ export const PLAYER_COLORS = [
     }
 ];
 
-// Board & UI Neutral Palette
 export const PALETTE = {
     appBg: '#181A20',          // Warm Charcoal-Slate Screen Background
     cardBg: '#232631',         // Clean Matte Card Background
@@ -129,41 +128,59 @@ export const COMMON_TRACK = [
 
 export const SAFE_INDICES = [0, 8, 13, 21, 26, 34, 39, 47];
 export const STAR_INDICES = [8, 21, 34, 47];
-export const START_INDICES = [0, 13, 26, 39]; // Red, Green, Yellow, Blue
+export const START_INDICES = [0, 13, 26, 39];
 
-// Home Columns (Steps 51 to 55) & Center Finish (Step 56)
+// Home Columns (Steps 51 to 56) & Center Goal (Step 57)
+export const FINISH_STEP = 57;
+
 export const HOME_COLUMNS = [
-    // 0: Red
+    // 0: Red (enters right into row 7)
     [
-        { r: 7, c: 1 }, { r: 7, c: 2 }, { r: 7, c: 3 }, { r: 7, c: 4 }, { r: 7, c: 5 },
-        { r: 7, c: 6 } // Center Finish Entrance
+        { r: 7, c: 1 }, // 51
+        { r: 7, c: 2 }, // 52
+        { r: 7, c: 3 }, // 53
+        { r: 7, c: 4 }, // 54
+        { r: 7, c: 5 }, // 55
+        { r: 7, c: 6 }, // 56: Home Triangle Boundary
+        { r: 7, c: 7 }  // 57: Finished in Goal
     ],
-    // 1: Green
+    // 1: Green (enters down into col 7)
     [
-        { r: 1, c: 7 }, { r: 2, c: 7 }, { r: 3, c: 7 }, { r: 4, c: 7 }, { r: 5, c: 7 },
-        { r: 6, c: 7 } // Center Finish Entrance
+        { r: 1, c: 7 }, // 51
+        { r: 2, c: 7 }, // 52
+        { r: 3, c: 7 }, // 53
+        { r: 4, c: 7 }, // 54
+        { r: 5, c: 7 }, // 55
+        { r: 6, c: 7 }, // 56
+        { r: 7, c: 7 }  // 57
     ],
-    // 2: Yellow
+    // 2: Yellow (enters left into row 7)
     [
-        { r: 7, c: 13 }, { r: 7, c: 12 }, { r: 7, c: 11 }, { r: 7, c: 10 }, { r: 7, c: 9 },
-        { r: 7, c: 8 } // Center Finish Entrance
+        { r: 7, c: 13 }, // 51
+        { r: 7, c: 12 }, // 52
+        { r: 7, c: 11 }, // 53
+        { r: 7, c: 10 }, // 54
+        { r: 7, c: 9 },  // 55
+        { r: 7, c: 8 },  // 56
+        { r: 7, c: 7 }   // 57
     ],
-    // 3: Blue
+    // 3: Blue (enters up into col 7)
     [
-        { r: 13, c: 7 }, { r: 12, c: 7 }, { r: 11, c: 7 }, { r: 10, c: 7 }, { r: 9, c: 7 },
-        { r: 8, c: 7 } // Center Finish Entrance
+        { r: 13, c: 7 }, // 51
+        { r: 12, c: 7 }, // 52
+        { r: 11, c: 7 }, // 53
+        { r: 10, c: 7 }, // 54
+        { r: 9, c: 7 },  // 55
+        { r: 8, c: 7 },  // 56
+        { r: 7, c: 7 }   // 57
     ]
 ];
 
 // Yard Base Token Pedestals (Center Coordinates in grid units)
 export const YARD_POSITIONS = [
-    // Red (Top-Left)
     [{ r: 1.5, c: 1.5 }, { r: 1.5, c: 3.5 }, { r: 3.5, c: 1.5 }, { r: 3.5, c: 3.5 }],
-    // Green (Top-Right)
     [{ r: 1.5, c: 10.5 }, { r: 1.5, c: 12.5 }, { r: 3.5, c: 10.5 }, { r: 3.5, c: 12.5 }],
-    // Yellow (Bottom-Right)
     [{ r: 10.5, c: 10.5 }, { r: 10.5, c: 12.5 }, { r: 12.5, c: 10.5 }, { r: 12.5, c: 12.5 }],
-    // Blue (Bottom-Left)
     [{ r: 10.5, c: 1.5 }, { r: 10.5, c: 3.5 }, { r: 12.5, c: 1.5 }, { r: 12.5, c: 3.5 }]
 ];
 
@@ -177,21 +194,21 @@ export class LudoGame {
         this.ctx = canvas.getContext('2d');
         this.ui = uiCallbacks || {};
 
-        this.mode = 'local'; // 'local', 'ai', 'online'
-        this.playerCount = 4; // 2, 3, or 4
+        this.mode = 'local';
+        this.playerCount = 4;
         this.activeSlots = [0, 1, 2, 3];
         this.currentTurnIndex = 0;
         this.diceValue = 1;
         this.isRolling = false;
-        this.waitingForRoll = true;
+        this.hasRolled = false;
         this.consecutiveSixes = 0;
         this.validMoves = [];
 
-        // Turn timer / progress (14 seconds per turn for active countdown)
-        this.turnDuration = 14000;
+        // Turn Watchdog Failsafe (15 seconds)
+        this.turnDuration = 15000;
         this.turnStartTime = performance.now();
+        this.watchdogTimer = null;
 
-        // Players state (4 tokens each: -1 = Yard, 0..50 = Track, 51..55 = Home stretch, 56 = Home Goal)
         this.players = [
             { id: 0, name: 'Red', isAI: false, tokens: [-1, -1, -1, -1], finishedTokens: 0, rank: null },
             { id: 1, name: 'Green', isAI: false, tokens: [-1, -1, -1, -1], finishedTokens: 0, rank: null },
@@ -202,7 +219,6 @@ export class LudoGame {
         this.winners = [];
         this.isGameOver = false;
 
-        // Animations & Board Metrics
         this.activeHopAnimation = null;
         this.particles = [];
         this.lastFrameTime = performance.now();
@@ -212,8 +228,6 @@ export class LudoGame {
         this.boardLeft = 0;
         this.boardTop = 0;
         this.boardWidth = 0;
-
-        // Subtle tactile pulse timer for selectable pawns
         this.pulseTime = 0;
 
         this.initEventListeners();
@@ -221,9 +235,6 @@ export class LudoGame {
         this.startRenderLoop();
     }
 
-    /**
-     * Safely normalize token array from Firebase objects/sparse arrays
-     */
     normalizeTokens(tokens) {
         if (!tokens) return [-1, -1, -1, -1];
         if (Array.isArray(tokens)) {
@@ -259,8 +270,8 @@ export class LudoGame {
             clearTimeout(this.autoMoveTimer);
             this.autoMoveTimer = null;
         }
+        this.clearTurnWatchdog();
 
-        // Configure active slots (2P: Red 0 vs Yellow 2 diagonally opposite)
         if (playerCount === 2) {
             this.activeSlots = [0, 2];
         } else if (playerCount === 3) {
@@ -270,11 +281,11 @@ export class LudoGame {
         }
 
         this.currentTurnIndex = 0;
-        this.waitingForRoll = true;
+        this.hasRolled = false;
+        this.isRolling = false;
         this.diceValue = 6;
         this.turnStartTime = performance.now();
 
-        // Reset player tokens
         this.players.forEach(p => {
             p.tokens = [-1, -1, -1, -1];
             p.finishedTokens = 0;
@@ -297,6 +308,11 @@ export class LudoGame {
 
         this.resize();
         this.updateUI();
+        this.armTurnWatchdog();
+
+        if (this.mode === 'online' && network.isHost) {
+            network.updateGameState(this.serializeState());
+        }
 
         if (this.isCurrentPlayerAI()) {
             this.triggerAIRoll();
@@ -315,15 +331,16 @@ export class LudoGame {
         return this.getCurrentPlayer().isAI;
     }
 
-    /**
-     * High DPI pixel-perfect scaling with foolproof fallback
-     */
+    isMyTurn() {
+        if (this.mode !== 'online') return true;
+        return this.getCurrentSlot() === network.playerSlot;
+    }
+
     resize() {
         const dpr = window.devicePixelRatio || 1;
         const rect = this.canvas.getBoundingClientRect();
         
-        // Ensure size is never 0 even if measured before paint
-        const fallback = Math.min(window.innerWidth * 0.94, window.innerHeight * 0.60, 520);
+        const fallback = Math.min(window.innerWidth * 0.94, window.innerHeight * 0.58, 520);
         let size = Math.min(rect.width, rect.height);
         if (!size || size < 40) {
             size = fallback;
@@ -336,7 +353,6 @@ export class LudoGame {
         this.boardLeft = 0;
         this.boardTop = 0;
 
-        // Apply clean transform
         this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
@@ -344,18 +360,17 @@ export class LudoGame {
         window.addEventListener('resize', () => this.resize());
 
         const handleInteraction = (clientX, clientY) => {
-            if (this.isGameOver || this.waitingForRoll || this.isRolling || this.activeHopAnimation) return;
+            if (this.isGameOver || !this.hasRolled || this.isRolling || this.activeHopAnimation) return;
 
             const rect = this.canvas.getBoundingClientRect();
             if (!rect.width || !rect.height) return;
 
-            // In CSS logical coordinates matching this.boardWidth:
             const scaleX = this.boardWidth / rect.width;
             const scaleY = this.boardWidth / rect.height;
             const x = (clientX - rect.left) * scaleX;
             const y = (clientY - rect.top) * scaleY;
 
-            if (this.mode === 'online' && this.getCurrentSlot() !== network.playerSlot) return;
+            if (!this.isMyTurn()) return;
             if (this.isCurrentPlayerAI()) return;
 
             this.handleCanvasClick(x, y);
@@ -381,8 +396,8 @@ export class LudoGame {
             const trackIndex = (startOffset + step) % 52;
             return COMMON_TRACK[trackIndex];
         }
-        if (step >= 51 && step <= 56) {
-            const homeIdx = step - 51;
+        if (step >= 51 && step <= 57) {
+            const homeIdx = Math.min(step - 51, 6);
             return HOME_COLUMNS[playerSlot][homeIdx];
         }
         return { r: 7, c: 7 };
@@ -396,20 +411,23 @@ export class LudoGame {
     }
 
     rollDice() {
-        if (this.isGameOver || !this.waitingForRoll || this.isRolling || this.activeHopAnimation) {
+        if (this.isGameOver || this.hasRolled || this.isRolling || this.activeHopAnimation) {
             return;
         }
 
-        if (this.mode === 'online' && this.getCurrentSlot() !== network.playerSlot) {
+        if (!this.isMyTurn()) {
+            if (this.ui.showToast) {
+                this.ui.showToast("Wait for opponent's turn!", "warning");
+            }
             return;
         }
 
-        this.waitingForRoll = false;
+        this.hasRolled = true;
         this.isRolling = true;
         audio.playDiceRoll();
 
         let simulatedDice = 1;
-        const rollDuration = 520;
+        const rollDuration = 500;
 
         const rollInterval = setInterval(() => {
             simulatedDice = Math.floor(Math.random() * 6) + 1;
@@ -462,14 +480,17 @@ export class LudoGame {
             if (this.ui.showToast) {
                 this.ui.showToast(`No valid moves for ${player.name}`);
             }
-            setTimeout(() => this.passTurn(), 700);
+            // Automatically advance after 900ms if no moves exist
+            setTimeout(() => this.passTurn(), 900);
         } else if (this.validMoves.length === 1) {
-            const autoMoveIdx = this.validMoves[0];
-            this.autoMoveTimer = setTimeout(() => {
-                if (!this.activeHopAnimation && this.validMoves.includes(autoMoveIdx)) {
-                    this.executeMove(autoMoveIdx);
-                }
-            }, 300);
+            if (this.isMyTurn()) {
+                const autoMoveIdx = this.validMoves[0];
+                this.autoMoveTimer = setTimeout(() => {
+                    if (!this.activeHopAnimation && this.validMoves.includes(autoMoveIdx)) {
+                        this.executeMove(autoMoveIdx);
+                    }
+                }, 300);
+            }
         } else {
             if (player.isAI) {
                 setTimeout(() => {
@@ -483,12 +504,28 @@ export class LudoGame {
     isValidMove(slot, tokenIndex, dice) {
         const tokens = this.normalizeTokens(this.players[slot].tokens);
         const step = tokens[tokenIndex];
-        if (step === 56) return false;
+        if (step >= 57) return false; // Already finished in center goal
         if (step === -1) return dice === 6;
-        return (step + dice) <= 56;
+        return (step + dice) <= 57; // Cannot overshoot 57
     }
 
     handleCanvasClick(clickX, clickY) {
+        if (this.isGameOver || this.isRolling) return;
+
+        if (this.mode === 'online' && !this.isMyTurn()) {
+            if (this.ui.showToast) {
+                this.ui.showToast("Wait for opponent's turn!", "warning");
+            }
+            return;
+        }
+
+        if (!this.hasRolled) {
+            if (this.isMyTurn() && this.ui.showToast) {
+                this.ui.showToast("Roll the dice first!");
+            }
+            return;
+        }
+
         if (this.validMoves.length === 0) return;
 
         const currentSlot = this.getCurrentSlot();
@@ -530,6 +567,7 @@ export class LudoGame {
             clearTimeout(this.autoMoveTimer);
             this.autoMoveTimer = null;
         }
+        this.clearTurnWatchdog();
 
         this.validMoves = [];
         const slot = this.getCurrentSlot();
@@ -539,6 +577,7 @@ export class LudoGame {
         const dice = this.diceValue;
 
         const targetStep = (startStep === -1) ? 0 : (startStep + dice);
+        if (targetStep > 57) return;
 
         if (this.mode === 'online' && slot === network.playerSlot) {
             network.broadcastMoveToken(tokenIndex, dice, startStep, targetStep);
@@ -571,7 +610,7 @@ export class LudoGame {
             waypoints,
             currentHopIndex: 0,
             hopProgress: 0,
-            hopDuration: 125,
+            hopDuration: 120,
             lastHopTime: performance.now(),
             onComplete: () => {
                 player.tokens[tokenIndex] = targetStep;
@@ -587,13 +626,15 @@ export class LudoGame {
         const player = this.players[slot];
         let grantsBonusRoll = false;
 
-        if (finalStep === 56) {
-            player.finishedTokens++;
+        if (finalStep >= 57) {
+            // FINISHED IN CENTER TRIANGLE GOAL!
+            player.tokens[tokenIndex] = 57;
+            player.finishedTokens = player.tokens.filter(t => t >= 57).length;
             audio.playHome();
             this.spawnConfettiParticles(this.gridToPixel(7, 7));
 
             if (this.ui.showToast) {
-                this.ui.showToast(`🎯 ${player.name} token reached Home! Bonus Roll!`, "success");
+                this.ui.showToast(`🎯 ${player.name}'s token reached Home! Bonus Roll!`, "success");
             }
             grantsBonusRoll = true;
 
@@ -663,15 +704,24 @@ export class LudoGame {
             }
         }
 
-        // In online mode, host broadcasts authoritative state anchor
-        if (this.mode === 'online' && network.isHost) {
-            network.syncFullGameState(this.serializeState());
-        }
-
         if (grantsBonusRoll && player.finishedTokens < 4) {
-            this.waitingForRoll = true;
+            this.hasRolled = false;
+            this.isRolling = false;
             this.turnStartTime = performance.now();
             this.updateUI();
+            this.armTurnWatchdog();
+
+            if (this.mode === 'online') {
+                network.updateGameState({
+                    currentTurn: this.getCurrentSlot(),
+                    currentTurnIndex: this.currentTurnIndex,
+                    hasRolled: false,
+                    isMoving: false,
+                    diceValue: this.diceValue,
+                    players: this.serializePlayers(),
+                    lastUpdate: Date.now()
+                });
+            }
 
             if (player.isAI) {
                 setTimeout(() => this.triggerAIRoll(), 650);
@@ -684,8 +734,11 @@ export class LudoGame {
     passTurn() {
         if (this.isGameOver) return;
 
+        this.clearTurnWatchdog();
         this.consecutiveSixes = 0;
         this.validMoves = [];
+        this.hasRolled = false;
+        this.isRolling = false;
 
         let nextIndex = this.currentTurnIndex;
         let attempts = 0;
@@ -695,12 +748,20 @@ export class LudoGame {
         } while (this.players[this.activeSlots[nextIndex]].finishedTokens === 4 && attempts <= this.activeSlots.length);
 
         this.currentTurnIndex = nextIndex;
-        this.waitingForRoll = true;
         this.turnStartTime = performance.now();
         this.updateUI();
+        this.armTurnWatchdog();
 
-        if (this.mode === 'online' && network.isHost) {
-            network.syncFullGameState(this.serializeState());
+        if (this.mode === 'online') {
+            network.updateGameState({
+                currentTurn: this.getCurrentSlot(),
+                currentTurnIndex: this.currentTurnIndex,
+                hasRolled: false,
+                isMoving: false,
+                diceValue: this.diceValue,
+                players: this.serializePlayers(),
+                lastUpdate: Date.now()
+            });
         }
 
         if (this.isCurrentPlayerAI()) {
@@ -709,7 +770,7 @@ export class LudoGame {
     }
 
     triggerAIRoll() {
-        if (this.isGameOver || !this.waitingForRoll || this.isRolling) return;
+        if (this.isGameOver || this.hasRolled || this.isRolling) return;
         this.rollDice();
     }
 
@@ -727,7 +788,7 @@ export class LudoGame {
             const targetStep = (currentStep === -1) ? 0 : (currentStep + dice);
             let score = 0;
 
-            if (targetStep === 56) score += 150;
+            if (targetStep === 57) score += 150;
             if (currentStep === -1 && dice === 6) score += 95;
 
             if (targetStep >= 0 && targetStep <= 50) {
@@ -772,7 +833,7 @@ export class LudoGame {
         this.activeSlots.forEach(s => {
             const tokens = this.normalizeTokens(this.players[s].tokens);
             tokens.forEach((step, tIdx) => {
-                if (step >= 0 && step < 56) {
+                if (step >= 0 && step < 57) {
                     const c = this.getTokenCoords(s, step, tIdx);
                     if (c.r === row && c.c === col) {
                         tokensOnTile.push({ slot: s, tokenIndex: tIdx });
@@ -810,6 +871,37 @@ export class LudoGame {
     }
 
     // ========================================================================
+    // TURN WATCHDOG & FAILSAFE SYNC (15 Seconds)
+    // ========================================================================
+
+    armTurnWatchdog() {
+        this.clearTurnWatchdog();
+        this.watchdogTimer = setTimeout(() => {
+            if (this.mode === 'online' && !this.isGameOver) {
+                console.warn("[Watchdog] Turn stalled for >15s. Auto-passing turn.");
+                if (this.ui.showToast) {
+                    this.ui.showToast("Turn auto-passed due to inactivity.", "warning");
+                }
+                this.forcePassTurn();
+            }
+        }, 15000);
+    }
+
+    clearTurnWatchdog() {
+        if (this.watchdogTimer) {
+            clearTimeout(this.watchdogTimer);
+            this.watchdogTimer = null;
+        }
+    }
+
+    forcePassTurn() {
+        this.isRolling = false;
+        this.hasRolled = false;
+        this.activeHopAnimation = null;
+        this.passTurn();
+    }
+
+    // ========================================================================
     // REMOTE MULTIPLAYER ACTION HANDLERS
     // ========================================================================
 
@@ -824,8 +916,13 @@ export class LudoGame {
     }
 
     applyRemoteDiceRoll(rollValue, consecutiveSixes, senderSlot) {
-        if (senderSlot !== this.getCurrentSlot()) return;
-        this.waitingForRoll = false;
+        if (senderSlot !== undefined) {
+            const senderTurnIdx = this.activeSlots.indexOf(senderSlot);
+            if (senderTurnIdx !== -1) {
+                this.currentTurnIndex = senderTurnIdx;
+            }
+        }
+        this.hasRolled = true;
         this.isRolling = true;
         audio.playDiceRoll();
 
@@ -834,16 +931,24 @@ export class LudoGame {
             this.consecutiveSixes = consecutiveSixes || 0;
             this.isRolling = false;
             this.processDiceRollResult();
-        }, 500);
+        }, 450);
     }
 
     applyRemoteMoveToken(tokenIndex, steps, fromStep, toStep, senderSlot) {
-        if (senderSlot !== this.getCurrentSlot()) return;
+        if (senderSlot !== undefined) {
+            const senderTurnIdx = this.activeSlots.indexOf(senderSlot);
+            if (senderTurnIdx !== -1) {
+                this.currentTurnIndex = senderTurnIdx;
+            }
+        }
         if (this.autoMoveTimer) {
             clearTimeout(this.autoMoveTimer);
             this.autoMoveTimer = null;
         }
         this.diceValue = steps;
+        if (!this.validMoves.includes(tokenIndex)) {
+            this.validMoves = [tokenIndex];
+        }
         this.executeMove(tokenIndex);
     }
 
@@ -851,16 +956,28 @@ export class LudoGame {
         if (!remoteState) return;
 
         if (remoteState.activeSlots) this.activeSlots = remoteState.activeSlots;
-        if (remoteState.currentTurnIndex !== undefined) this.currentTurnIndex = remoteState.currentTurnIndex;
+
+        // Sync turn slot directly
+        if (remoteState.currentTurn !== undefined) {
+            const turnIdx = this.activeSlots.indexOf(remoteState.currentTurn);
+            if (turnIdx !== -1) {
+                this.currentTurnIndex = turnIdx;
+            }
+        } else if (remoteState.currentTurnIndex !== undefined) {
+            this.currentTurnIndex = remoteState.currentTurnIndex;
+        }
+
         if (remoteState.diceValue !== undefined) this.diceValue = remoteState.diceValue;
-        if (remoteState.waitingForRoll !== undefined) this.waitingForRoll = remoteState.waitingForRoll;
+        if (remoteState.hasRolled !== undefined) this.hasRolled = remoteState.hasRolled;
+        if (remoteState.isMoving === false) this.activeHopAnimation = null;
         if (remoteState.consecutiveSixes !== undefined) this.consecutiveSixes = remoteState.consecutiveSixes;
 
-        if (remoteState.players) {
-            remoteState.players.forEach(rp => {
+        if (remoteState.players && !this.activeHopAnimation) {
+            const pData = Array.isArray(remoteState.players) ? remoteState.players : Object.values(remoteState.players);
+            pData.forEach(rp => {
                 if (rp && rp.id !== undefined && this.players[rp.id]) {
                     this.players[rp.id].tokens = this.normalizeTokens(rp.tokens);
-                    this.players[rp.id].finishedTokens = Number(rp.finishedTokens || 0);
+                    this.players[rp.id].finishedTokens = Number(rp.finishedTokens !== undefined ? rp.finishedTokens : this.players[rp.id].tokens.filter(t => t >= 57).length);
                     this.players[rp.id].rank = rp.rank || null;
                 }
             });
@@ -869,31 +986,42 @@ export class LudoGame {
         if (remoteState.winners) this.winners = remoteState.winners;
         if (remoteState.isGameOver !== undefined) this.isGameOver = remoteState.isGameOver;
 
+        this.armTurnWatchdog();
         this.updateUI();
+    }
+
+    serializePlayers() {
+        const out = {};
+        this.activeSlots.forEach(s => {
+            out[s] = {
+                id: s,
+                name: this.players[s].name,
+                tokens: this.normalizeTokens(this.players[s].tokens),
+                finishedTokens: this.players[s].finishedTokens,
+                rank: this.players[s].rank
+            };
+        });
+        return out;
     }
 
     serializeState() {
         return {
-            activeSlots: this.activeSlots,
+            currentTurn: this.getCurrentSlot(),
             currentTurnIndex: this.currentTurnIndex,
+            activeSlots: this.activeSlots,
             diceValue: this.diceValue,
-            waitingForRoll: this.waitingForRoll,
+            hasRolled: this.hasRolled,
             consecutiveSixes: this.consecutiveSixes,
-            players: this.players.map(p => ({
-                id: p.id,
-                name: p.name,
-                tokens: this.normalizeTokens(p.tokens),
-                finishedTokens: p.finishedTokens,
-                rank: p.rank
-            })),
+            players: this.serializePlayers(),
             winners: [...this.winners],
             isGameOver: this.isGameOver,
-            timestamp: Date.now()
+            lastUpdate: Date.now()
         };
     }
 
     endGame() {
         this.isGameOver = true;
+        this.clearTurnWatchdog();
         audio.playVictory();
         this.updateUI();
 
@@ -915,8 +1043,9 @@ export class LudoGame {
                 currentSlot: this.getCurrentSlot(),
                 currentPlayer: this.getCurrentPlayer(),
                 diceValue: this.diceValue,
-                waitingForRoll: this.waitingForRoll,
+                hasRolled: this.hasRolled,
                 isRolling: this.isRolling,
+                isMyTurn: this.isMyTurn(),
                 consecutiveSixes: this.consecutiveSixes,
                 players: this.players,
                 activeSlots: this.activeSlots,
@@ -1025,29 +1154,28 @@ export class LudoGame {
         const cs = this.cellSize;
         const dpr = window.devicePixelRatio || 1;
 
-        // Apply clean transform on every frame
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, size, size);
 
-        // 1. Board Frame: Rich Matte Walnut/Slate Border with Rounded Corners
+        // 1. Board Frame
         this.drawBoardFrame(ctx, size);
 
-        // 2. Crisp Off-White Base Board
+        // 2. 15x15 Grid
         this.drawBoardTiles(ctx, cs, size);
 
-        // 3. 4 Matte Colored Corner Yard Bases with Clean White Inset Cards
-        this.drawMatteYard(ctx, 0, 0, PLAYER_COLORS[0]);  // Top-Left (Red)
-        this.drawMatteYard(ctx, 0, 9, PLAYER_COLORS[1]);  // Top-Right (Green)
-        this.drawMatteYard(ctx, 9, 9, PLAYER_COLORS[2]);  // Bottom-Right (Yellow)
-        this.drawMatteYard(ctx, 9, 0, PLAYER_COLORS[3]);  // Bottom-Left (Blue)
+        // 3. 4 Corner Yards
+        this.drawMatteYard(ctx, 0, 0, PLAYER_COLORS[0]);  // Red (Top-Left)
+        this.drawMatteYard(ctx, 0, 9, PLAYER_COLORS[1]);  // Green (Top-Right)
+        this.drawMatteYard(ctx, 9, 9, PLAYER_COLORS[2]);  // Yellow (Bottom-Right)
+        this.drawMatteYard(ctx, 9, 0, PLAYER_COLORS[3]);  // Blue (Bottom-Left)
 
-        // 4. Center Finish Area: 4 Sharp Matte Triangles with Clean White Crown Emblem
+        // 4. Center Finish Area (4 Triangles + Crown)
         this.drawCenterFinish(ctx, cs);
 
-        // 5. Safe Zones: Minimal Vector Stars and Directional Start Arrows
+        // 5. Safe Zones (Stars & Directional Start Arrows)
         this.drawSafeZoneMarkers(ctx, cs);
 
-        // 6. Pawns (Top-Down Tactile Pin Pawns with Crisp 2.5px White Border)
+        // 6. Pawns
         this.drawPawns(ctx, cs);
 
         // 7. Particles
@@ -1156,7 +1284,6 @@ export class LudoGame {
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.06)';
         ctx.stroke();
 
-        // 4 Recessed Circular Token Sockets with Inset Look
         const pedestals = YARD_POSITIONS[colorObj.id];
         pedestals.forEach(pos => {
             const p = this.gridToPixel(pos.r, pos.c);
@@ -1321,7 +1448,7 @@ export class LudoGame {
                     return;
                 }
 
-                if (step === 56) {
+                if (step >= 57) {
                     this.drawGoalPawn(ctx, slot, tokenIdx, cs);
                     return;
                 }
@@ -1330,7 +1457,7 @@ export class LudoGame {
                 const pos = this.gridToPixel(coords.r, coords.c);
 
                 let offset = { x: 0, y: 0, scale: 1.0 };
-                if (step >= 0 && step < 56) {
+                if (step >= 0 && step < 57) {
                     offset = this.getTokenOffset(slot, tokenIdx, coords.r, coords.c);
                 }
 
@@ -1338,7 +1465,7 @@ export class LudoGame {
                 const finalY = pos.y + offset.y;
                 const radius = (cs * 0.40) * offset.scale;
 
-                const isMovable = (slot === currentSlot && this.validMoves.includes(tokenIdx));
+                const isMovable = (slot === currentSlot && this.hasRolled && this.validMoves.includes(tokenIdx));
 
                 this.drawMattePawn(ctx, finalX, finalY, radius, colorObj, isMovable, 1.0);
             });
@@ -1392,13 +1519,13 @@ export class LudoGame {
     drawMattePawn(ctx, x, y, radius, colorObj, isMovable, scale = 1.0) {
         ctx.save();
 
-        // 1. Soft Realistic Ground Drop Shadow
+        // Ground drop shadow
         ctx.beginPath();
         ctx.ellipse(x, y + 2.5 * scale, radius * 0.95, radius * 0.85, 0, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(0, 0, 0, 0.28)';
         ctx.fill();
 
-        // 2. Movable Selection Indicator (Crisp White Bouncing Ring)
+        // Movable Selection Indicator
         if (isMovable) {
             const pulse = (Math.sin(this.pulseTime * 6) + 1) / 2;
             const ringRadius = radius + 3 + pulse * 2.5;
@@ -1415,27 +1542,27 @@ export class LudoGame {
             ctx.fill();
         }
 
-        // 3. Crisp Pure White Outer Ring (2.5px)
+        // Crisp pure white outer ring (2.5px)
         ctx.beginPath();
         ctx.arc(x, y, radius, 0, Math.PI * 2);
         ctx.fillStyle = '#FFFFFF';
         ctx.fill();
 
-        // 4. Solid Matte Colored Pawn Body
+        // Solid matte colored pawn body
         const bodyRadius = radius - 2.5 * scale;
         ctx.beginPath();
         ctx.arc(x, y, bodyRadius, 0, Math.PI * 2);
         ctx.fillStyle = colorObj.hex;
         ctx.fill();
 
-        // 5. Tactile Inner Ring Detail (lathe-turned board piece feel)
+        // Concentric inner ring detail
         ctx.beginPath();
         ctx.arc(x, y, bodyRadius * 0.62, 0, Math.PI * 2);
         ctx.lineWidth = 1.4 * scale;
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
         ctx.stroke();
 
-        // 6. Center Pin Head Dot
+        // Center pin head dot
         ctx.beginPath();
         ctx.arc(x, y, bodyRadius * 0.28, 0, Math.PI * 2);
         ctx.fillStyle = '#FFFFFF';

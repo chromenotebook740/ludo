@@ -34,6 +34,7 @@
             <div class="header-actions">
                 <button class="icon-btn" id="audio-toggle-btn" title="Toggle Sound" aria-label="Toggle Sound">🔊</button>
                 <button class="icon-btn" id="rules-btn" title="Game Rules" aria-label="Game Rules">📜</button>
+                <button class="icon-btn" id="btn-force-sync" title="Force Sync / Next Turn" aria-label="Force Sync">⚡</button>
                 <button class="icon-btn" id="exit-match-btn" title="Exit Match" aria-label="Exit Match" style="display: none;">🚪</button>
             </div>
         </header>
@@ -195,6 +196,9 @@
                     <button class="emoji-btn" data-emoji="😭" title="Crying">😭</button>
                     <button class="emoji-btn" data-emoji="⚡" title="Lightning">⚡</button>
                 </div>
+
+                <!-- Force Sync Failsafe Button -->
+                <button class="btn-sync" id="btn-ctrl-force-sync" title="Force Next Turn / Sync">⚡ Sync</button>
             </div>
         </section>
 
@@ -410,18 +414,27 @@
 
         let gameInstance = null;
 
-        // UI Toast Notification Helper
+        // UI Toast Notification Helper (Single Active Toast, No Stacking)
+        let toastTimeout = null;
         function showToast(message, type = 'normal') {
+            if (toastTimeout) {
+                clearTimeout(toastTimeout);
+                toastTimeout = null;
+            }
+            toastContainer.innerHTML = '';
             const toast = document.createElement('div');
             toast.className = `toast ${type}`;
             toast.textContent = message;
             toastContainer.appendChild(toast);
-            setTimeout(() => {
+            toastTimeout = setTimeout(() => {
                 toast.style.opacity = '0';
                 toast.style.transform = 'translateY(-8px)';
                 toast.style.transition = 'all 0.2s ease';
-                setTimeout(() => toast.remove(), 220);
-            }, 2400);
+                setTimeout(() => {
+                    toast.remove();
+                    toastTimeout = null;
+                }, 220);
+            }, 2000);
         }
 
         // Sound Mute Toggle
@@ -478,12 +491,12 @@
                     dock.style.display = 'flex';
                     if (s === slot) {
                         dock.classList.add('active-turn');
-                        // Restart countdown animation
+                        // Restart countdown animation (15s watchdog)
                         const line = dock.querySelector('.turn-progress-line');
                         if (line) {
                             line.style.animation = 'none';
                             line.offsetHeight; // trigger reflow
-                            line.style.animation = 'turnCountdown 14s linear forwards';
+                            line.style.animation = 'turnCountdown 15s linear forwards';
                         }
                     } else {
                         dock.classList.remove('active-turn');
@@ -492,11 +505,11 @@
                     const p = state.players[s];
                     document.getElementById(`name-player-${s}`).textContent = p.name;
 
-                    // Update 4 Mini Progress Dots (tokens in home)
+                    // Update 4 Mini Progress Dots (tokens in center finish goal)
                     const dotsContainer = document.getElementById(`dots-player-${s}`);
                     if (dotsContainer) {
                         const dots = dotsContainer.querySelectorAll('.progress-dot');
-                        const homeCount = p.tokens.filter(t => t === 56).length;
+                        const homeCount = (p.finishedTokens !== undefined) ? p.finishedTokens : (p.tokens ? p.tokens.filter(t => t >= 57).length : 0);
                         dots.forEach((dot, dIdx) => {
                             dot.className = 'progress-dot';
                             if (dIdx < homeCount) {
@@ -508,18 +521,20 @@
             });
 
             // Turn Instructions
-            turnTitle.textContent = `${player.name}'s Turn`;
+            const isMe = (gameInstance.mode !== 'online') || (slot === network.playerSlot);
+            turnTitle.textContent = isMe ? "Your Turn" : `${player.name}'s Turn`;
             turnTitle.style.color = color.hex;
 
-            if (state.waitingForRoll) {
-                turnHint.textContent = player.isAI ? 'Bot is rolling...' : 'Tap Dice to Roll!';
+            if (!state.hasRolled) {
+                turnHint.textContent = isMe ? (player.isAI ? 'Bot is rolling...' : 'Tap Dice to Roll!') : `Waiting for ${player.name} to roll...`;
             } else {
-                turnHint.textContent = 'Select a pawn to move';
+                turnHint.textContent = isMe ? 'Select a pawn to move' : `${player.name} is choosing a pawn...`;
             }
         }
 
         diceContainer.addEventListener('click', () => {
-            if (gameInstance.mode === 'online' && gameInstance.getCurrentSlot() !== network.playerSlot) {
+            if (gameInstance.isGameOver || gameInstance.isRolling || gameInstance.hasRolled) return;
+            if (gameInstance.mode === 'online' && !gameInstance.isMyTurn()) {
                 showToast("Wait for opponent's turn!", "warning");
                 return;
             }
@@ -531,8 +546,8 @@
             const dock = document.getElementById(`dock-player-${s}`);
             if (dock) {
                 dock.addEventListener('click', () => {
-                    if (gameInstance.getCurrentSlot() === s && gameInstance.waitingForRoll) {
-                        if (gameInstance.mode === 'online' && s !== network.playerSlot) {
+                    if (gameInstance.getCurrentSlot() === s && !gameInstance.hasRolled && !gameInstance.isRolling) {
+                        if (gameInstance.mode === 'online' && !gameInstance.isMyTurn()) {
                             showToast("Wait for opponent's turn!", "warning");
                             return;
                         }
@@ -541,6 +556,19 @@
                 });
             }
         });
+
+        // Force Sync / Turn Pass Failsafe
+        function triggerForceSync() {
+            if (gameInstance.isGameOver) return;
+            showToast("⚡ Force syncing match turn...", "warning");
+            gameInstance.forcePassTurn();
+        }
+
+        const btnForceSync = document.getElementById('btn-force-sync');
+        if (btnForceSync) btnForceSync.addEventListener('click', triggerForceSync);
+
+        const btnCtrlSync = document.getElementById('btn-ctrl-force-sync');
+        if (btnCtrlSync) btnCtrlSync.addEventListener('click', triggerForceSync);
 
         // ResizeObserver on Board Area for zero-lag high-DPI canvas updates
         const boardArea = document.querySelector('.board-area');
@@ -837,8 +865,11 @@
 
             renderLobbySlots(roomData);
 
-            if (roomData.status === 'playing' && modalWaitingLobby.classList.contains('active')) {
+            if (roomData.status === 'playing' && !gameScreen.classList.contains('active')) {
                 closeModal(modalWaitingLobby);
+                closeModal(modalOnlineChoice);
+                closeModal(modalJoinRoom);
+                closeModal(modalCreateRoom);
                 showGameScreen(roomData.code);
 
                 const playerNames = {};

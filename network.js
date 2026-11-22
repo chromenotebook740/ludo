@@ -41,9 +41,12 @@ class NetworkManager {
         this.isHost = false;
         this.roomRef = null;
         this.roomListenerUnsub = null;
+        this.lastProcessedActionTimestamp = 0;
+        this.lastProcessedReactionTimestamp = 0;
         this.onRoomStateChange = null;
         this.onReactionReceived = null;
         this.onGameAction = null;
+        this.onGameStateSync = null;
         this.init();
     }
 
@@ -58,7 +61,6 @@ class NetworkManager {
 
     init() {
         try {
-            // Check if config has been modified from default dummy values
             const isDefault = !firebaseConfig.apiKey || 
                               firebaseConfig.apiKey.includes('DummyKey') || 
                               (firebaseConfig.databaseURL && firebaseConfig.databaseURL.includes('genius-ludo-demo'));
@@ -68,7 +70,6 @@ class NetworkManager {
                 return;
             }
 
-            // Ensure databaseURL is present
             if (!firebaseConfig.databaseURL && firebaseConfig.projectId) {
                 firebaseConfig.databaseURL = `https://${firebaseConfig.projectId}-default-rtdb.firebaseio.com`;
             }
@@ -114,6 +115,8 @@ class NetworkManager {
         this.currentRoomCode = this.generateRoomCode();
         this.isHost = true;
         this.playerSlot = 0; // Host is always slot 0 (Red)
+        this.lastProcessedActionTimestamp = Date.now();
+        this.lastProcessedReactionTimestamp = Date.now();
 
         this.roomRef = ref(this.db, `rooms/${this.currentRoomCode}`);
 
@@ -160,6 +163,8 @@ class NetworkManager {
         this.currentRoomCode = cleanCode;
         this.playerName = playerName || 'Player';
         localStorage.setItem('genius_ludo_player_name', this.playerName);
+        this.lastProcessedActionTimestamp = Date.now();
+        this.lastProcessedReactionTimestamp = Date.now();
 
         this.roomRef = ref(this.db, `rooms/${cleanCode}`);
         const snapshot = await get(this.roomRef);
@@ -233,9 +238,6 @@ class NetworkManager {
             this.roomListenerUnsub();
         }
 
-        this.lastProcessedActionTimestamp = 0;
-        this.lastProcessedReactionTimestamp = 0;
-
         this.roomListenerUnsub = onValue(this.roomRef, (snapshot) => {
             if (!snapshot.exists()) {
                 if (this.onRoomStateChange) {
@@ -251,7 +253,7 @@ class NetworkManager {
 
             // Sync Remote Actions (Dice rolls, Pawn moves)
             if (data.lastAction && data.lastAction.timestamp) {
-                if (data.lastAction.timestamp !== this.lastProcessedActionTimestamp) {
+                if (data.lastAction.timestamp > this.lastProcessedActionTimestamp) {
                     this.lastProcessedActionTimestamp = data.lastAction.timestamp;
                     if (data.lastAction.senderSlot !== this.playerSlot && this.onGameAction) {
                         this.onGameAction(data.lastAction);
@@ -259,14 +261,14 @@ class NetworkManager {
                 }
             }
 
-            // Sync Full Authoritative Game State for non-host clients
-            if (data.gameState && !this.isHost && this.onGameStateSync) {
+            // Sync Authoritative Game State for ALL clients (host and non-host)
+            if (data.gameState && this.onGameStateSync) {
                 this.onGameStateSync(data.gameState);
             }
 
             // Floating Emoji Reactions
             if (data.reaction && data.reaction.timestamp) {
-                if (data.reaction.timestamp !== this.lastProcessedReactionTimestamp) {
+                if (data.reaction.timestamp > this.lastProcessedReactionTimestamp) {
                     this.lastProcessedReactionTimestamp = data.reaction.timestamp;
                     if (this.onReactionReceived) {
                         this.onReactionReceived(data.reaction);
@@ -294,64 +296,97 @@ class NetworkManager {
      * Broadcast dice roll action
      */
     async broadcastDiceRoll(rollValue, consecutiveSixes) {
-        if (!this.roomRef) return;
-        await update(ref(this.db, `rooms/${this.currentRoomCode}/lastAction`), {
-            type: 'DICE_ROLL',
-            senderSlot: this.playerSlot,
-            rollValue: rollValue,
-            consecutiveSixes: consecutiveSixes,
-            timestamp: Date.now()
-        });
+        if (!this.roomRef || !this.currentRoomCode || !this.db) return;
+        try {
+            await update(ref(this.db, `rooms/${this.currentRoomCode}/lastAction`), {
+                type: 'DICE_ROLL',
+                senderSlot: this.playerSlot,
+                rollValue: rollValue,
+                consecutiveSixes: consecutiveSixes || 0,
+                timestamp: Date.now()
+            });
+        } catch (err) {
+            console.error("[Network] broadcastDiceRoll error:", err);
+        }
     }
 
     /**
      * Broadcast token move action
      */
     async broadcastMoveToken(tokenIndex, steps, fromStep, toStep) {
-        if (!this.roomRef) return;
-        await update(ref(this.db, `rooms/${this.currentRoomCode}/lastAction`), {
-            type: 'MOVE_TOKEN',
-            senderSlot: this.playerSlot,
-            tokenIndex: tokenIndex,
-            steps: steps,
-            fromStep: fromStep,
-            toStep: toStep,
-            timestamp: Date.now()
-        });
+        if (!this.roomRef || !this.currentRoomCode || !this.db) return;
+        try {
+            await update(ref(this.db, `rooms/${this.currentRoomCode}/lastAction`), {
+                type: 'MOVE_TOKEN',
+                senderSlot: this.playerSlot,
+                tokenIndex: tokenIndex,
+                steps: steps,
+                fromStep: fromStep,
+                toStep: toStep,
+                timestamp: Date.now()
+            });
+        } catch (err) {
+            console.error("[Network] broadcastMoveToken error:", err);
+        }
     }
 
     /**
-     * Synchronize entire game state (used by host as authoritative anchor)
+     * Atomic partial or full game state update (turn, tokens, hasRolled, etc.)
+     * Used by both host and active turn players to sync authoritative match progress
+     */
+    async updateGameState(partialState) {
+        if (!this.roomRef || !this.currentRoomCode || !this.db) return;
+        try {
+            const gameRef = ref(this.db, `rooms/${this.currentRoomCode}/gameState`);
+            await update(gameRef, {
+                ...partialState,
+                lastUpdate: Date.now()
+            });
+        } catch (err) {
+            console.error("[Network] Failed to update gameState:", err);
+        }
+    }
+
+    /**
+     * Synchronize entire game state (used as master snapshot)
      */
     async syncFullGameState(state) {
-        if (!this.roomRef || !this.isHost) return;
-        await update(ref(this.db, `rooms/${this.currentRoomCode}`), {
-            gameState: state
-        });
+        if (!this.roomRef || !this.currentRoomCode || !this.db) return;
+        try {
+            await update(ref(this.db, `rooms/${this.currentRoomCode}`), {
+                gameState: state
+            });
+        } catch (err) {
+            console.error("[Network] syncFullGameState error:", err);
+        }
     }
 
     /**
      * Send floating emoji reaction
      */
     async sendEmoji(emojiChar) {
-        if (!this.roomRef) return;
-        const reactionData = {
-            id: 'r_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-            senderSlot: this.playerSlot,
-            senderName: this.playerName,
-            emoji: emojiChar,
-            timestamp: Date.now()
-        };
-        await update(ref(this.db, `rooms/${this.currentRoomCode}`), {
-            reaction: reactionData
-        });
+        if (!this.roomRef || !this.currentRoomCode || !this.db) return;
+        try {
+            const reactionData = {
+                id: 'r_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+                senderSlot: this.playerSlot,
+                senderName: this.playerName,
+                emoji: emojiChar,
+                timestamp: Date.now()
+            };
+            await update(ref(this.db, `rooms/${this.currentRoomCode}`), {
+                reaction: reactionData
+            });
+        } catch (err) {
+            console.error("[Network] sendEmoji error:", err);
+        }
     }
 
     /**
      * Leave or disconnect from current room
      */
     async leaveRoom() {
-        if (this.roomRef && this.currentRoomCode) {
+        if (this.roomRef && this.currentRoomCode && this.db) {
             try {
                 if (this.isHost) {
                     await remove(this.roomRef);
