@@ -17,17 +17,16 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 // ============================================================================
-// 1. FIREBASE CONFIGURATION (REPLACE WITH YOUR OWN FIREBASE REALTIME DB KEYS)
-// Follow the 3-step setup guide in README to create your free Firebase database!
+// 1. FIREBASE CONFIGURATION (ACTIVE PRODUCTION CONFIG)
 // ============================================================================
 export const firebaseConfig = {
-    apiKey: "AIzaSyDummyKeyForGeniusLudoGameStatic",
-    authDomain: "genius-ludo-demo.firebaseapp.com",
-    databaseURL: "https://genius-ludo-demo-default-rtdb.firebaseio.com",
-    projectId: "genius-ludo-demo",
-    storageBucket: "genius-ludo-demo.appspot.com",
-    messagingSenderId: "123456789012",
-    appId: "1:123456789012:web:abcdef1234567890"
+    apiKey: "AIzaSyBuNouMEmbRvZcvDwKAX0b3Z0OKslIvJo8",
+    authDomain: "genius-ludo-624ec.firebaseapp.com",
+    databaseURL: "https://genius-ludo-624ec-default-rtdb.firebaseio.com",
+    projectId: "genius-ludo-624ec",
+    storageBucket: "genius-ludo-624ec.firebasestorage.app",
+    messagingSenderId: "413107174344",
+    appId: "1:413107174344:web:55ffa9e709edc9db621efd"
 };
 
 class NetworkManager {
@@ -60,18 +59,24 @@ class NetworkManager {
     init() {
         try {
             // Check if config has been modified from default dummy values
-            const isDefault = firebaseConfig.apiKey.includes('DummyKey') || 
-                              firebaseConfig.databaseURL.includes('genius-ludo-demo');
+            const isDefault = !firebaseConfig.apiKey || 
+                              firebaseConfig.apiKey.includes('DummyKey') || 
+                              (firebaseConfig.databaseURL && firebaseConfig.databaseURL.includes('genius-ludo-demo'));
             if (isDefault) {
                 this.isConfigured = false;
-                console.warn("[Network] Firebase config is currently set to placeholder credentials. Offline Pass & Play and AI modes are active. Replace firebaseConfig in network.js with your Firebase credentials to enable online multiplayer.");
+                console.warn("[Network] Firebase config is currently set to placeholder credentials. Offline Pass & Play and AI modes are active.");
                 return;
             }
 
+            // Ensure databaseURL is present
+            if (!firebaseConfig.databaseURL && firebaseConfig.projectId) {
+                firebaseConfig.databaseURL = `https://${firebaseConfig.projectId}-default-rtdb.firebaseio.com`;
+            }
+
             this.app = initializeApp(firebaseConfig);
-            this.db = getDatabase(this.app);
+            this.db = getDatabase(this.app, firebaseConfig.databaseURL);
             this.isConfigured = true;
-            console.log("[Network] Firebase initialized successfully.");
+            console.log("[Network] Firebase Realtime DB initialized successfully with URL:", firebaseConfig.databaseURL);
         } catch (err) {
             this.isConfigured = false;
             console.warn("[Network] Firebase initialization failed or offline:", err.message);
