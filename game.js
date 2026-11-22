@@ -155,7 +155,7 @@ export const HOME_COLUMNS = [
     ]
 ];
 
-// Yard Base Token Pedestals
+// Yard Base Token Pedestals (Center Coordinates in grid units)
 export const YARD_POSITIONS = [
     // Red (Top-Left)
     [{ r: 1.5, c: 1.5 }, { r: 1.5, c: 3.5 }, { r: 3.5, c: 1.5 }, { r: 3.5, c: 3.5 }],
@@ -221,6 +221,30 @@ export class LudoGame {
         this.startRenderLoop();
     }
 
+    /**
+     * Safely normalize token array from Firebase objects/sparse arrays
+     */
+    normalizeTokens(tokens) {
+        if (!tokens) return [-1, -1, -1, -1];
+        if (Array.isArray(tokens)) {
+            return [
+                tokens[0] !== undefined ? Number(tokens[0]) : -1,
+                tokens[1] !== undefined ? Number(tokens[1]) : -1,
+                tokens[2] !== undefined ? Number(tokens[2]) : -1,
+                tokens[3] !== undefined ? Number(tokens[3]) : -1
+            ];
+        }
+        if (typeof tokens === 'object') {
+            return [
+                tokens[0] !== undefined ? Number(tokens[0]) : (tokens['0'] !== undefined ? Number(tokens['0']) : -1),
+                tokens[1] !== undefined ? Number(tokens[1]) : (tokens['1'] !== undefined ? Number(tokens['1']) : -1),
+                tokens[2] !== undefined ? Number(tokens[2]) : (tokens['2'] !== undefined ? Number(tokens['2']) : -1),
+                tokens[3] !== undefined ? Number(tokens[3]) : (tokens['3'] !== undefined ? Number(tokens['3']) : -1)
+            ];
+        }
+        return [-1, -1, -1, -1];
+    }
+
     startMatch(mode, playerCount, playerNames = {}, aiSlots = []) {
         this.mode = mode;
         this.playerCount = playerCount;
@@ -271,6 +295,7 @@ export class LudoGame {
             }
         });
 
+        this.resize();
         this.updateUI();
 
         if (this.isCurrentPlayerAI()) {
@@ -291,22 +316,28 @@ export class LudoGame {
     }
 
     /**
-     * High DPI pixel-perfect scaling
+     * High DPI pixel-perfect scaling with foolproof fallback
      */
     resize() {
         const dpr = window.devicePixelRatio || 1;
         const rect = this.canvas.getBoundingClientRect();
-        const size = Math.min(rect.width, rect.height);
+        
+        // Ensure size is never 0 even if measured before paint
+        const fallback = Math.min(window.innerWidth * 0.94, window.innerHeight * 0.60, 520);
+        let size = Math.min(rect.width, rect.height);
+        if (!size || size < 40) {
+            size = fallback;
+        }
 
         this.canvas.width = Math.round(size * dpr);
         this.canvas.height = Math.round(size * dpr);
-        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-        this.ctx.scale(dpr, dpr);
-
         this.boardWidth = size;
         this.cellSize = size / 15;
         this.boardLeft = 0;
         this.boardTop = 0;
+
+        // Apply clean transform
+        this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     }
 
     initEventListeners() {
@@ -316,8 +347,13 @@ export class LudoGame {
             if (this.isGameOver || this.waitingForRoll || this.isRolling || this.activeHopAnimation) return;
 
             const rect = this.canvas.getBoundingClientRect();
-            const x = clientX - rect.left;
-            const y = clientY - rect.top;
+            if (!rect.width || !rect.height) return;
+
+            // In CSS logical coordinates matching this.boardWidth:
+            const scaleX = this.boardWidth / rect.width;
+            const scaleY = this.boardWidth / rect.height;
+            const x = (clientX - rect.left) * scaleX;
+            const y = (clientY - rect.top) * scaleY;
 
             if (this.mode === 'online' && this.getCurrentSlot() !== network.playerSlot) return;
             if (this.isCurrentPlayerAI()) return;
@@ -397,6 +433,7 @@ export class LudoGame {
     processDiceRollResult() {
         const player = this.getCurrentPlayer();
         const slot = this.getCurrentSlot();
+        const tokens = this.normalizeTokens(player.tokens);
 
         if (this.diceValue === 6) {
             this.consecutiveSixes++;
@@ -413,7 +450,7 @@ export class LudoGame {
         }
 
         this.validMoves = [];
-        player.tokens.forEach((step, idx) => {
+        tokens.forEach((step, idx) => {
             if (this.isValidMove(slot, idx, this.diceValue)) {
                 this.validMoves.push(idx);
             }
@@ -444,7 +481,8 @@ export class LudoGame {
     }
 
     isValidMove(slot, tokenIndex, dice) {
-        const step = this.players[slot].tokens[tokenIndex];
+        const tokens = this.normalizeTokens(this.players[slot].tokens);
+        const step = tokens[tokenIndex];
         if (step === 56) return false;
         if (step === -1) return dice === 6;
         return (step + dice) <= 56;
@@ -455,12 +493,13 @@ export class LudoGame {
 
         const currentSlot = this.getCurrentSlot();
         const player = this.getCurrentPlayer();
+        const tokens = this.normalizeTokens(player.tokens);
 
         let closestTokenIdx = -1;
         let minDistance = this.cellSize * 1.3;
 
         this.validMoves.forEach(tokenIdx => {
-            const step = player.tokens[tokenIdx];
+            const step = tokens[tokenIdx];
             const coords = this.getTokenCoords(currentSlot, step, tokenIdx);
             const pos = this.gridToPixel(coords.r, coords.c);
 
@@ -495,12 +534,13 @@ export class LudoGame {
         this.validMoves = [];
         const slot = this.getCurrentSlot();
         const player = this.getCurrentPlayer();
-        const startStep = player.tokens[tokenIndex];
+        const tokens = this.normalizeTokens(player.tokens);
+        const startStep = tokens[tokenIndex];
         const dice = this.diceValue;
 
         const targetStep = (startStep === -1) ? 0 : (startStep + dice);
 
-        if (this.mode === 'online') {
+        if (this.mode === 'online' && slot === network.playerSlot) {
             network.broadcastMoveToken(tokenIndex, dice, startStep, targetStep);
         }
 
@@ -588,7 +628,8 @@ export class LudoGame {
                 this.activeSlots.forEach(otherSlot => {
                     if (otherSlot === slot) return;
                     const otherPlayer = this.players[otherSlot];
-                    otherPlayer.tokens.forEach((otherStep, otherTokenIdx) => {
+                    const otherTokens = this.normalizeTokens(otherPlayer.tokens);
+                    otherTokens.forEach((otherStep, otherTokenIdx) => {
                         if (otherStep >= 0 && otherStep <= 50) {
                             const otherTrackIndex = (START_INDICES[otherSlot] + otherStep) % 52;
                             if (otherTrackIndex === currentTrackIndex) {
@@ -622,6 +663,11 @@ export class LudoGame {
             }
         }
 
+        // In online mode, host broadcasts authoritative state anchor
+        if (this.mode === 'online' && network.isHost) {
+            network.syncFullGameState(this.serializeState());
+        }
+
         if (grantsBonusRoll && player.finishedTokens < 4) {
             this.waitingForRoll = true;
             this.turnStartTime = performance.now();
@@ -653,6 +699,10 @@ export class LudoGame {
         this.turnStartTime = performance.now();
         this.updateUI();
 
+        if (this.mode === 'online' && network.isHost) {
+            network.syncFullGameState(this.serializeState());
+        }
+
         if (this.isCurrentPlayerAI()) {
             setTimeout(() => this.triggerAIRoll(), 600);
         }
@@ -666,13 +716,14 @@ export class LudoGame {
     chooseAIMove() {
         const slot = this.getCurrentSlot();
         const player = this.getCurrentPlayer();
+        const tokens = this.normalizeTokens(player.tokens);
         const dice = this.diceValue;
 
         let bestScore = -9999;
         let bestTokenIdx = this.validMoves[0];
 
         this.validMoves.forEach(tokenIdx => {
-            const currentStep = player.tokens[tokenIdx];
+            const currentStep = tokens[tokenIdx];
             const targetStep = (currentStep === -1) ? 0 : (currentStep + dice);
             let score = 0;
 
@@ -687,7 +738,8 @@ export class LudoGame {
                     let opponentPresent = false;
                     this.activeSlots.forEach(otherSlot => {
                         if (otherSlot === slot) return;
-                        this.players[otherSlot].tokens.forEach(otherStep => {
+                        const otherTokens = this.normalizeTokens(this.players[otherSlot].tokens);
+                        otherTokens.forEach(otherStep => {
                             if (otherStep >= 0 && otherStep <= 50) {
                                 const otherTrackIndex = (START_INDICES[otherSlot] + otherStep) % 52;
                                 if (otherTrackIndex === targetTrackIndex) {
@@ -718,7 +770,8 @@ export class LudoGame {
     getTokenOffset(playerSlot, tokenIndex, row, col) {
         const tokensOnTile = [];
         this.activeSlots.forEach(s => {
-            this.players[s].tokens.forEach((step, tIdx) => {
+            const tokens = this.normalizeTokens(this.players[s].tokens);
+            tokens.forEach((step, tIdx) => {
                 if (step >= 0 && step < 56) {
                     const c = this.getTokenCoords(s, step, tIdx);
                     if (c.r === row && c.c === col) {
@@ -754,6 +807,89 @@ export class LudoGame {
             const p = positions[myIndex % 4];
             return { x: p.x, y: p.y, scale: 0.56 };
         }
+    }
+
+    // ========================================================================
+    // REMOTE MULTIPLAYER ACTION HANDLERS
+    // ========================================================================
+
+    handleRemoteAction(action) {
+        if (!action) return;
+
+        if (action.type === 'DICE_ROLL') {
+            this.applyRemoteDiceRoll(action.rollValue, action.consecutiveSixes, action.senderSlot);
+        } else if (action.type === 'MOVE_TOKEN') {
+            this.applyRemoteMoveToken(action.tokenIndex, action.steps, action.fromStep, action.toStep, action.senderSlot);
+        }
+    }
+
+    applyRemoteDiceRoll(rollValue, consecutiveSixes, senderSlot) {
+        if (senderSlot !== this.getCurrentSlot()) return;
+        this.waitingForRoll = false;
+        this.isRolling = true;
+        audio.playDiceRoll();
+
+        setTimeout(() => {
+            this.diceValue = rollValue;
+            this.consecutiveSixes = consecutiveSixes || 0;
+            this.isRolling = false;
+            this.processDiceRollResult();
+        }, 500);
+    }
+
+    applyRemoteMoveToken(tokenIndex, steps, fromStep, toStep, senderSlot) {
+        if (senderSlot !== this.getCurrentSlot()) return;
+        if (this.autoMoveTimer) {
+            clearTimeout(this.autoMoveTimer);
+            this.autoMoveTimer = null;
+        }
+        this.diceValue = steps;
+        this.executeMove(tokenIndex);
+    }
+
+    applyRemoteStateSync(remoteState) {
+        if (!remoteState) return;
+
+        if (remoteState.activeSlots) this.activeSlots = remoteState.activeSlots;
+        if (remoteState.currentTurnIndex !== undefined) this.currentTurnIndex = remoteState.currentTurnIndex;
+        if (remoteState.diceValue !== undefined) this.diceValue = remoteState.diceValue;
+        if (remoteState.waitingForRoll !== undefined) this.waitingForRoll = remoteState.waitingForRoll;
+        if (remoteState.consecutiveSixes !== undefined) this.consecutiveSixes = remoteState.consecutiveSixes;
+
+        if (remoteState.players) {
+            remoteState.players.forEach(rp => {
+                if (rp && rp.id !== undefined && this.players[rp.id]) {
+                    this.players[rp.id].tokens = this.normalizeTokens(rp.tokens);
+                    this.players[rp.id].finishedTokens = Number(rp.finishedTokens || 0);
+                    this.players[rp.id].rank = rp.rank || null;
+                }
+            });
+        }
+
+        if (remoteState.winners) this.winners = remoteState.winners;
+        if (remoteState.isGameOver !== undefined) this.isGameOver = remoteState.isGameOver;
+
+        this.updateUI();
+    }
+
+    serializeState() {
+        return {
+            activeSlots: this.activeSlots,
+            currentTurnIndex: this.currentTurnIndex,
+            diceValue: this.diceValue,
+            waitingForRoll: this.waitingForRoll,
+            consecutiveSixes: this.consecutiveSixes,
+            players: this.players.map(p => ({
+                id: p.id,
+                name: p.name,
+                tokens: this.normalizeTokens(p.tokens),
+                finishedTokens: p.finishedTokens,
+                rank: p.rank
+            })),
+            winners: [...this.winners],
+            isGameOver: this.isGameOver,
+            timestamp: Date.now()
+        };
     }
 
     endGame() {
@@ -880,10 +1016,17 @@ export class LudoGame {
     }
 
     render() {
+        if (!this.boardWidth || this.boardWidth < 40 || !this.cellSize) {
+            this.resize();
+        }
+
         const ctx = this.ctx;
         const size = this.boardWidth;
         const cs = this.cellSize;
+        const dpr = window.devicePixelRatio || 1;
 
+        // Apply clean transform on every frame
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         ctx.clearRect(0, 0, size, size);
 
         // 1. Board Frame: Rich Matte Walnut/Slate Border with Rounded Corners
@@ -913,13 +1056,11 @@ export class LudoGame {
 
     drawBoardFrame(ctx, size) {
         ctx.save();
-        // Outer Matte Walnut/Slate Frame
         ctx.fillStyle = PALETTE.boardFrame;
         ctx.beginPath();
         ctx.roundRect(0, 0, size, size, 18);
         ctx.fill();
 
-        // Subtle 2px inner bevel outline
         ctx.lineWidth = 2;
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
         ctx.stroke();
@@ -931,13 +1072,11 @@ export class LudoGame {
         const pad = cs * 0.18;
         const innerSize = size - pad * 2;
 
-        // Playing Surface Background: Warm Crisp Off-White
         ctx.fillStyle = PALETTE.tileIvory;
         ctx.beginPath();
         ctx.roundRect(pad, pad, innerSize, innerSize, 12);
         ctx.fill();
 
-        // 52 Common Track Cells (Sharp 1.2px Grid Lines)
         COMMON_TRACK.forEach((cell, idx) => {
             const x = cell.c * cs;
             const y = cell.r * cs;
@@ -956,7 +1095,6 @@ export class LudoGame {
             ctx.rect(x, y, cs, cs);
 
             if (isStartTile) {
-                // Starting tile in player's soft tint base
                 ctx.fillStyle = startColor.tint;
                 ctx.fill();
             } else {
@@ -964,13 +1102,11 @@ export class LudoGame {
                 ctx.fill();
             }
 
-            // Sharp Grid Border
             ctx.lineWidth = 1.2;
             ctx.strokeStyle = PALETTE.tileBorder;
             ctx.stroke();
         });
 
-        // 4 Colored Home Columns (Steps 51 to 55)
         HOME_COLUMNS.forEach((colArray, colorIdx) => {
             const colColor = PLAYER_COLORS[colorIdx];
             for (let i = 0; i < 5; i++) {
@@ -980,7 +1116,7 @@ export class LudoGame {
 
                 ctx.beginPath();
                 ctx.rect(x, y, cs, cs);
-                ctx.fillStyle = colColor.hex; // Clean solid matte color
+                ctx.fillStyle = colColor.hex;
                 ctx.fill();
 
                 ctx.lineWidth = 1.2;
@@ -1000,13 +1136,11 @@ export class LudoGame {
         const h = 6 * cs;
 
         ctx.save();
-        // Solid Matte Colored Outer Yard
         ctx.fillStyle = colorObj.hex;
         ctx.beginPath();
         ctx.roundRect(x + 2, y + 2, w - 4, h - 4, 14);
         ctx.fill();
 
-        // Inner White Rounded Card with Inset Look
         const inset = cs * 0.85;
         const ix = x + inset;
         const iy = y + inset;
@@ -1022,15 +1156,14 @@ export class LudoGame {
         ctx.strokeStyle = 'rgba(0, 0, 0, 0.06)';
         ctx.stroke();
 
-        // 4 Recessed Circular Token Sockets with Inset Shadow
+        // 4 Recessed Circular Token Sockets with Inset Look
         const pedestals = YARD_POSITIONS[colorObj.id];
         pedestals.forEach(pos => {
-            const px = pos.c * cs;
-            const py = pos.r * cs;
+            const p = this.gridToPixel(pos.r, pos.c);
             const rad = cs * 0.62;
 
             ctx.beginPath();
-            ctx.arc(px, py, rad, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, rad, 0, Math.PI * 2);
             ctx.fillStyle = PALETTE.socketFill;
             ctx.fill();
 
@@ -1038,9 +1171,8 @@ export class LudoGame {
             ctx.strokeStyle = PALETTE.socketBorder;
             ctx.stroke();
 
-            // Subtle inner ring accent in player tint
             ctx.beginPath();
-            ctx.arc(px, py, rad * 0.45, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, rad * 0.45, 0, Math.PI * 2);
             ctx.fillStyle = colorObj.tint;
             ctx.fill();
         });
@@ -1053,13 +1185,11 @@ export class LudoGame {
         const cx = 7.5 * cs;
         const cy = 7.5 * cs;
 
-        // 4 Sharp Geometric Triangles in 4 Matte Colors
         this.drawMatteTriangle(ctx, 6 * cs, 6 * cs, 6 * cs, 9 * cs, cx, cy, PLAYER_COLORS[0].hex);
         this.drawMatteTriangle(ctx, 6 * cs, 6 * cs, 9 * cs, 6 * cs, cx, cy, PLAYER_COLORS[1].hex);
         this.drawMatteTriangle(ctx, 9 * cs, 6 * cs, 9 * cs, 9 * cs, cx, cy, PLAYER_COLORS[2].hex);
         this.drawMatteTriangle(ctx, 6 * cs, 9 * cs, 9 * cs, 9 * cs, cx, cy, PLAYER_COLORS[3].hex);
 
-        // Center White Finish Emblem Disc
         ctx.beginPath();
         ctx.arc(cx, cy, cs * 0.62, 0, Math.PI * 2);
         ctx.fillStyle = '#FFFFFF';
@@ -1068,7 +1198,6 @@ export class LudoGame {
         ctx.strokeStyle = PALETTE.boardFrame;
         ctx.stroke();
 
-        // Clean Matte Crown Emblem in Center
         this.drawCrownIcon(ctx, cx, cy, cs * 0.32);
 
         ctx.restore();
@@ -1089,7 +1218,7 @@ export class LudoGame {
 
     drawCrownIcon(ctx, cx, cy, radius) {
         ctx.save();
-        ctx.fillStyle = '#F59E0B'; // Matte Gold Crown
+        ctx.fillStyle = '#F59E0B';
         ctx.beginPath();
         const w = radius * 1.5;
         const h = radius * 1.1;
@@ -1106,7 +1235,6 @@ export class LudoGame {
         ctx.closePath();
         ctx.fill();
 
-        // Crown bottom band
         ctx.fillStyle = '#D97706';
         ctx.fillRect(left, top + h - 2, w, 2.5);
         ctx.restore();
@@ -1115,7 +1243,6 @@ export class LudoGame {
     drawSafeZoneMarkers(ctx, cs) {
         ctx.save();
 
-        // 4 Crisp Minimal Stars in Slate (#94A3B8)
         STAR_INDICES.forEach(idx => {
             const cell = COMMON_TRACK[idx];
             const px = (cell.c + 0.5) * cs;
@@ -1123,7 +1250,6 @@ export class LudoGame {
             this.drawMinimalStar(ctx, px, py, 5, cs * 0.30, cs * 0.14, PALETTE.starColor);
         });
 
-        // 4 Start Tiles with Directional Colored Arrows
         START_INDICES.forEach((idx, colorIdx) => {
             const cell = COMMON_TRACK[idx];
             const px = (cell.c + 0.5) * cs;
@@ -1184,9 +1310,11 @@ export class LudoGame {
 
         this.activeSlots.forEach(slot => {
             const player = this.players[slot];
+            if (!player) return;
             const colorObj = PLAYER_COLORS[slot];
+            const tokens = this.normalizeTokens(player.tokens);
 
-            player.tokens.forEach((step, tokenIdx) => {
+            tokens.forEach((step, tokenIdx) => {
                 if (this.activeHopAnimation && 
                     this.activeHopAnimation.slot === slot && 
                     this.activeHopAnimation.tokenIndex === tokenIdx) {

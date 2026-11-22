@@ -519,8 +519,48 @@
         }
 
         diceContainer.addEventListener('click', () => {
+            if (gameInstance.mode === 'online' && gameInstance.getCurrentSlot() !== network.playerSlot) {
+                showToast("Wait for opponent's turn!", "warning");
+                return;
+            }
             gameInstance.rollDice();
         });
+
+        // Also allow tapping active player's dock to roll
+        [0, 1, 2, 3].forEach(s => {
+            const dock = document.getElementById(`dock-player-${s}`);
+            if (dock) {
+                dock.addEventListener('click', () => {
+                    if (gameInstance.getCurrentSlot() === s && gameInstance.waitingForRoll) {
+                        if (gameInstance.mode === 'online' && s !== network.playerSlot) {
+                            showToast("Wait for opponent's turn!", "warning");
+                            return;
+                        }
+                        gameInstance.rollDice();
+                    }
+                });
+            }
+        });
+
+        // ResizeObserver on Board Area for zero-lag high-DPI canvas updates
+        const boardArea = document.querySelector('.board-area');
+        if (window.ResizeObserver && boardArea) {
+            const ro = new ResizeObserver(() => {
+                if (gameScreen.classList.contains('active')) {
+                    gameInstance.resize();
+                }
+            });
+            ro.observe(boardArea);
+        }
+
+        // Multiplayer Remote Action Sync
+        network.onGameAction = (action) => {
+            gameInstance.handleRemoteAction(action);
+        };
+
+        network.onGameStateSync = (state) => {
+            gameInstance.applyRemoteStateSync(state);
+        };
 
         // Floating Quick Emojis
         document.querySelectorAll('.emoji-btn').forEach(btn => {
@@ -588,7 +628,11 @@
                 headerRoomPill.classList.remove('visible');
             }
 
-            setTimeout(() => gameInstance.resize(), 50);
+            // Immediately resize and reinforce on next animation frame
+            gameInstance.resize();
+            requestAnimationFrame(() => {
+                gameInstance.resize();
+            });
         }
 
         function showHomeScreen() {

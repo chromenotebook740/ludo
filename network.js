@@ -233,6 +233,9 @@ class NetworkManager {
             this.roomListenerUnsub();
         }
 
+        this.lastProcessedActionTimestamp = 0;
+        this.lastProcessedReactionTimestamp = 0;
+
         this.roomListenerUnsub = onValue(this.roomRef, (snapshot) => {
             if (!snapshot.exists()) {
                 if (this.onRoomStateChange) {
@@ -241,11 +244,34 @@ class NetworkManager {
                 return;
             }
             const data = snapshot.val();
+
             if (this.onRoomStateChange) {
                 this.onRoomStateChange(data);
             }
-            if (data.reaction && this.onReactionReceived) {
-                this.onReactionReceived(data.reaction);
+
+            // Sync Remote Actions (Dice rolls, Pawn moves)
+            if (data.lastAction && data.lastAction.timestamp) {
+                if (data.lastAction.timestamp !== this.lastProcessedActionTimestamp) {
+                    this.lastProcessedActionTimestamp = data.lastAction.timestamp;
+                    if (data.lastAction.senderSlot !== this.playerSlot && this.onGameAction) {
+                        this.onGameAction(data.lastAction);
+                    }
+                }
+            }
+
+            // Sync Full Authoritative Game State for non-host clients
+            if (data.gameState && !this.isHost && this.onGameStateSync) {
+                this.onGameStateSync(data.gameState);
+            }
+
+            // Floating Emoji Reactions
+            if (data.reaction && data.reaction.timestamp) {
+                if (data.reaction.timestamp !== this.lastProcessedReactionTimestamp) {
+                    this.lastProcessedReactionTimestamp = data.reaction.timestamp;
+                    if (this.onReactionReceived) {
+                        this.onReactionReceived(data.reaction);
+                    }
+                }
             }
         }, (error) => {
             console.error("[Network] Room sync error:", error);
