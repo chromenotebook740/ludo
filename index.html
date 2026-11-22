@@ -509,7 +509,7 @@
                     const dotsContainer = document.getElementById(`dots-player-${s}`);
                     if (dotsContainer) {
                         const dots = dotsContainer.querySelectorAll('.progress-dot');
-                        const homeCount = (p.finishedTokens !== undefined) ? p.finishedTokens : (p.tokens ? p.tokens.filter(t => t >= 57).length : 0);
+                        const homeCount = (p.finishedTokens !== undefined) ? p.finishedTokens : (p.tokens ? p.tokens.filter(t => t >= 56).length : 0);
                         dots.forEach((dot, dIdx) => {
                             dot.className = 'progress-dot';
                             if (dIdx < homeCount) {
@@ -999,13 +999,68 @@
             showHomeScreen();
         });
 
-        // URL Query Param Auto-Fill (?room=LUDO42)
+        // ====================================================================
+        // SESSION PERSISTENCE: Auto-Rejoin on Page Refresh
+        // ====================================================================
+        async function tryRestoreSession() {
+            if (!network.isConfigured) return false;
+
+            let rejoinResult = null;
+            try {
+                rejoinResult = await network.tryAutoRejoin();
+            } catch (e) {
+                console.warn('[App] Auto-rejoin attempt failed:', e);
+                return false;
+            }
+
+            if (!rejoinResult) return false;
+
+            const { roomId, roomData } = rejoinResult;
+
+            // If game is already playing, drop straight in
+            if (roomData && roomData.status === 'playing') {
+                // Close any open modals
+                document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
+                showGameScreen(roomId);
+
+                const playerNames = {};
+                Object.values(roomData.players || {}).forEach(p => {
+                    playerNames[p.slot] = p.name;
+                });
+
+                gameInstance.startMatch('online', roomData.maxPlayers, playerNames, []);
+                showToast(`♻️ Rejoined room ${roomId}!`, 'success');
+
+                // Apply the latest Firebase game state if available
+                if (roomData.gameState) {
+                    gameInstance.applyRemoteStateSync(roomData.gameState);
+                }
+                return true;
+            }
+
+            // If still in lobby (waiting), re-open the lobby
+            if (roomData && roomData.status === 'waiting') {
+                openWaitingLobby(roomId);
+                showToast(`♻️ Rejoined lobby ${roomId}`, 'success');
+                return true;
+            }
+
+            // Room finished or unknown state — clear session
+            network.clearSession();
+            return false;
+        }
+
+        // URL Query Param Auto-Fill (?room=LUDO42) — only if no session was restored
         const urlParams = new URLSearchParams(window.location.search);
         const autoRoom = urlParams.get('room');
-        if (autoRoom && autoRoom.trim().length === 6) {
-            document.getElementById('join-room-code').value = autoRoom.trim().toUpperCase();
-            openModal(modalJoinRoom);
-        }
+
+        // Try session restore first; fall back to URL param join prompt
+        tryRestoreSession().then(restored => {
+            if (!restored && autoRoom && autoRoom.trim().length === 6) {
+                document.getElementById('join-room-code').value = autoRoom.trim().toUpperCase();
+                openModal(modalJoinRoom);
+            }
+        });
     </script>
 </body>
 </html>

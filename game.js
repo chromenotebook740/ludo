@@ -130,8 +130,8 @@ export const SAFE_INDICES = [0, 8, 13, 21, 26, 34, 39, 47];
 export const STAR_INDICES = [8, 21, 34, 47];
 export const START_INDICES = [0, 13, 26, 39];
 
-// Home Columns (Steps 51 to 56) & Center Goal (Step 57)
-export const FINISH_STEP = 57;
+// Home Columns (Steps 51 to 55) & Center Goal (Step 56 = Finished)
+export const FINISH_STEP = 56;
 
 export const HOME_COLUMNS = [
     // 0: Red (enters right into row 7)
@@ -141,8 +141,7 @@ export const HOME_COLUMNS = [
         { r: 7, c: 3 }, // 53
         { r: 7, c: 4 }, // 54
         { r: 7, c: 5 }, // 55
-        { r: 7, c: 6 }, // 56: Home Triangle Boundary
-        { r: 7, c: 7 }  // 57: Finished in Goal
+        { r: 7, c: 7 }  // 56: Finished in Center Goal
     ],
     // 1: Green (enters down into col 7)
     [
@@ -151,8 +150,7 @@ export const HOME_COLUMNS = [
         { r: 3, c: 7 }, // 53
         { r: 4, c: 7 }, // 54
         { r: 5, c: 7 }, // 55
-        { r: 6, c: 7 }, // 56
-        { r: 7, c: 7 }  // 57
+        { r: 7, c: 7 }  // 56
     ],
     // 2: Yellow (enters left into row 7)
     [
@@ -161,8 +159,7 @@ export const HOME_COLUMNS = [
         { r: 7, c: 11 }, // 53
         { r: 7, c: 10 }, // 54
         { r: 7, c: 9 },  // 55
-        { r: 7, c: 8 },  // 56
-        { r: 7, c: 7 }   // 57
+        { r: 7, c: 7 }   // 56
     ],
     // 3: Blue (enters up into col 7)
     [
@@ -171,8 +168,7 @@ export const HOME_COLUMNS = [
         { r: 11, c: 7 }, // 53
         { r: 10, c: 7 }, // 54
         { r: 9, c: 7 },  // 55
-        { r: 8, c: 7 },  // 56
-        { r: 7, c: 7 }   // 57
+        { r: 7, c: 7 }   // 56
     ]
 ];
 
@@ -396,8 +392,8 @@ export class LudoGame {
             const trackIndex = (startOffset + step) % 52;
             return COMMON_TRACK[trackIndex];
         }
-        if (step >= 51 && step <= 57) {
-            const homeIdx = Math.min(step - 51, 6);
+        if (step >= 51 && step <= 56) {
+            const homeIdx = Math.min(step - 51, 5);
             return HOME_COLUMNS[playerSlot][homeIdx];
         }
         return { r: 7, c: 7 };
@@ -504,9 +500,9 @@ export class LudoGame {
     isValidMove(slot, tokenIndex, dice) {
         const tokens = this.normalizeTokens(this.players[slot].tokens);
         const step = tokens[tokenIndex];
-        if (step >= 57) return false; // Already finished in center goal
+        if (step >= 56) return false; // Already finished in center goal
         if (step === -1) return dice === 6;
-        return (step + dice) <= 57; // Cannot overshoot 57
+        return (step + dice) <= 56; // Cannot overshoot 56
     }
 
     handleCanvasClick(clickX, clickY) {
@@ -577,7 +573,7 @@ export class LudoGame {
         const dice = this.diceValue;
 
         const targetStep = (startStep === -1) ? 0 : (startStep + dice);
-        if (targetStep > 57) return;
+        if (targetStep > 56) return;
 
         if (this.mode === 'online' && slot === network.playerSlot) {
             network.broadcastMoveToken(tokenIndex, dice, startStep, targetStep);
@@ -626,10 +622,10 @@ export class LudoGame {
         const player = this.players[slot];
         let grantsBonusRoll = false;
 
-        if (finalStep >= 57) {
+        if (finalStep >= 56) {
             // FINISHED IN CENTER TRIANGLE GOAL!
-            player.tokens[tokenIndex] = 57;
-            player.finishedTokens = player.tokens.filter(t => t >= 57).length;
+            player.tokens[tokenIndex] = 56;
+            player.finishedTokens = player.tokens.filter(t => t >= 56).length;
             audio.playHome();
             this.spawnConfettiParticles(this.gridToPixel(7, 7));
 
@@ -788,7 +784,7 @@ export class LudoGame {
             const targetStep = (currentStep === -1) ? 0 : (currentStep + dice);
             let score = 0;
 
-            if (targetStep === 57) score += 150;
+            if (targetStep === 56) score += 150;
             if (currentStep === -1 && dice === 6) score += 95;
 
             if (targetStep >= 0 && targetStep <= 50) {
@@ -833,7 +829,7 @@ export class LudoGame {
         this.activeSlots.forEach(s => {
             const tokens = this.normalizeTokens(this.players[s].tokens);
             tokens.forEach((step, tIdx) => {
-                if (step >= 0 && step < 57) {
+                if (step >= 0 && step < 56) {
                     const c = this.getTokenCoords(s, step, tIdx);
                     if (c.r === row && c.c === col) {
                         tokensOnTile.push({ slot: s, tokenIndex: tIdx });
@@ -977,7 +973,7 @@ export class LudoGame {
             pData.forEach(rp => {
                 if (rp && rp.id !== undefined && this.players[rp.id]) {
                     this.players[rp.id].tokens = this.normalizeTokens(rp.tokens);
-                    this.players[rp.id].finishedTokens = Number(rp.finishedTokens !== undefined ? rp.finishedTokens : this.players[rp.id].tokens.filter(t => t >= 57).length);
+                    this.players[rp.id].finishedTokens = Number(rp.finishedTokens !== undefined ? rp.finishedTokens : this.players[rp.id].tokens.filter(t => t >= 56).length);
                     this.players[rp.id].rank = rp.rank || null;
                 }
             });
@@ -1448,7 +1444,7 @@ export class LudoGame {
                     return;
                 }
 
-                if (step >= 57) {
+                if (step >= 56) {
                     this.drawGoalPawn(ctx, slot, tokenIdx, cs);
                     return;
                 }
@@ -1457,7 +1453,7 @@ export class LudoGame {
                 const pos = this.gridToPixel(coords.r, coords.c);
 
                 let offset = { x: 0, y: 0, scale: 1.0 };
-                if (step >= 0 && step < 57) {
+                if (step >= 0 && step < 56) {
                     offset = this.getTokenOffset(slot, tokenIdx, coords.r, coords.c);
                 }
 

@@ -59,6 +59,113 @@ class NetworkManager {
         return id;
     }
 
+    // ===== SESSION PERSISTENCE =====
+
+    saveSession(roomId, playerColor, playerName, playerId) {
+        try {
+            localStorage.setItem('genius_ludo_session', JSON.stringify({
+                roomId,
+                playerColor,
+                playerName,
+                playerId,
+                savedAt: Date.now()
+            }));
+        } catch (e) { /* storage quota */ }
+    }
+
+    clearSession() {
+        localStorage.removeItem('genius_ludo_session');
+    }
+
+    getSession() {
+        try {
+            const raw = localStorage.getItem('genius_ludo_session');
+            return raw ? JSON.parse(raw) : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    updateBrowserURL(roomId) {
+        try {
+            window.history.replaceState({}, '', '?room=' + roomId);
+        } catch (e) { /* SSR safety */ }
+    }
+
+    resetBrowserURL() {
+        try {
+            window.history.replaceState({}, '', window.location.pathname);
+        } catch (e) { /* SSR safety */ }
+    }
+
+    /**
+     * Try to auto-rejoin a session stored in localStorage.
+     * Returns the restored session object { roomId, playerColor, playerName, playerSlot, roomData }
+     * or null if the session is invalid / room no longer exists.
+     */
+    async tryAutoRejoin() {
+        if (!this.checkConfig()) return null;
+
+        const session = this.getSession();
+        if (!session || !session.roomId || !session.playerId) return null;
+
+        // Session expires after 4 hours
+        if (Date.now() - (session.savedAt || 0) > 4 * 60 * 60 * 1000) {
+            this.clearSession();
+            return null;
+        }
+
+        try {
+            const roomRef = ref(this.db, `rooms/${session.roomId}`);
+            const snapshot = await get(roomRef);
+            if (!snapshot.exists()) {
+                this.clearSession();
+                return null;
+            }
+
+            const roomData = snapshot.val();
+            const players = roomData.players || {};
+
+            // Verify our playerId is still in the room
+            if (!players[session.playerId]) {
+                this.clearSession();
+                return null;
+            }
+
+            const playerEntry = players[session.playerId];
+            this.currentRoomCode = session.roomId;
+            this.playerName = session.playerName || playerEntry.name || 'Player';
+            this.playerSlot = playerEntry.slot;
+            this.isHost = (playerEntry.id === roomData.hostId || playerEntry.isHost);
+            this.roomRef = roomRef;
+            this.lastProcessedActionTimestamp = Date.now();
+            this.lastProcessedReactionTimestamp = Date.now();
+
+            // Mark online again
+            await update(ref(this.db, `rooms/${session.roomId}/players/${session.playerId}`), {
+                online: true
+            });
+            onDisconnect(ref(this.db, `rooms/${session.roomId}/players/${session.playerId}`))
+                .update({ online: false });
+
+            this.listenToRoom();
+            this.updateBrowserURL(session.roomId);
+
+            return {
+                roomId: session.roomId,
+                playerColor: session.playerColor,
+                playerName: this.playerName,
+                playerSlot: this.playerSlot,
+                isHost: this.isHost,
+                roomData
+            };
+        } catch (err) {
+            console.warn('[Network] tryAutoRejoin failed:', err.message);
+            this.clearSession();
+            return null;
+        }
+    }
+
     init() {
         try {
             const isDefault = !firebaseConfig.apiKey || 
@@ -142,6 +249,9 @@ class NetworkManager {
         };
 
         await set(this.roomRef, initialRoomData);
+
+        this.saveSession(this.currentRoomCode, 'red', this.playerName, this.playerId);
+        this.updateBrowserURL(this.currentRoomCode);
 
         // Disconnect handler
         const playerRef = ref(this.db, `rooms/${this.currentRoomCode}/players/${this.playerId}`);
@@ -227,6 +337,10 @@ class NetworkManager {
 
         const playerRef = ref(this.db, `rooms/${cleanCode}/players/${this.playerId}`);
         onDisconnect(playerRef).update({ online: false });
+
+        const colorNames = ['red', 'green', 'yellow', 'blue'];
+        this.saveSession(cleanCode, colorNames[this.playerSlot] || 'red', this.playerName, this.playerId);
+        this.updateBrowserURL(cleanCode);
 
         this.listenToRoom();
         return roomData;
@@ -401,6 +515,8 @@ class NetworkManager {
             this.roomListenerUnsub();
             this.roomListenerUnsub = null;
         }
+        this.clearSession();
+        this.resetBrowserURL();
         this.currentRoomCode = null;
         this.roomRef = null;
         this.isHost = false;
