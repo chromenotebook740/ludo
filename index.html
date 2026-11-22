@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="viewport-fit=cover, width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="Genius Ludo - Ultra-clean, modern matte-finish tabletop board game.">
+    <meta name="theme-color" content="#181A20">
+    <title>Genius Ludo | Modern Matte Tabletop Edition</title>
+    <!-- Modern High-Legibility Typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Toast Notification Layer -->
+        <div id="toast-container"></div>
+
+        <!-- Minimalist Modern Header -->
+        <header class="app-header">
+            <div class="brand-container" id="brand-home-btn" title="Back to Home">
+                <div class="brand-icon">🎲</div>
+                <div class="brand-title">GENIUS LUDO</div>
+            </div>
+
+            <!-- Active Room Pill Badge (with 1-tap copy) -->
+            <div class="header-room-pill" id="header-room-pill" title="Tap to copy Room Code">
+                <span>ROOM:</span>
+                <span id="header-room-code" style="font-family: monospace; letter-spacing: 1px;">------</span>
+                <span style="font-size: 11px; opacity: 0.8;">📋</span>
+            </div>
+
+            <div class="header-actions">
+                <button class="icon-btn" id="audio-toggle-btn" title="Toggle Sound" aria-label="Toggle Sound">🔊</button>
+                <button class="icon-btn" id="rules-btn" title="Game Rules" aria-label="Game Rules">📜</button>
+                <button class="icon-btn" id="exit-match-btn" title="Exit Match" aria-label="Exit Match" style="display: none;">🚪</button>
+            </div>
+        </header>
+
+        <!-- ================================================================== -->
+        <!-- SCREEN 1: HOME LAUNCHER (Tactile Matte Dashboard)                  -->
+        <!-- ================================================================== -->
+        <main class="screen active" id="home-screen">
+            <div class="hero-section">
+                <span class="hero-badge">Modern Tabletop Edition</span>
+                <h1 class="hero-title">GENIUS LUDO</h1>
+                <p class="hero-sub">Pure Matte Tabletop • 60 FPS Canvas • Zero Lag</p>
+            </div>
+
+            <div class="mode-cards-container">
+                <!-- Mode 1: Play Online -->
+                <div class="mode-card" data-mode="online" id="card-play-online">
+                    <div class="mode-card-icon">🌐</div>
+                    <div class="mode-card-info">
+                        <div class="mode-card-title">Play Online</div>
+                        <div class="mode-card-desc">Create or join private room via 6-digit code or link</div>
+                    </div>
+                    <div class="mode-card-arrow">➔</div>
+                </div>
+
+                <!-- Mode 2: Pass & Play -->
+                <div class="mode-card" data-mode="local" id="card-pass-play">
+                    <div class="mode-card-icon">👥</div>
+                    <div class="mode-card-info">
+                        <div class="mode-card-title">Pass &amp; Play</div>
+                        <div class="mode-card-desc">Local 2 to 4 players on this single device</div>
+                    </div>
+                    <div class="mode-card-arrow">➔</div>
+                </div>
+
+                <!-- Mode 3: Vs Computer -->
+                <div class="mode-card" data-mode="ai" id="card-vs-ai">
+                    <div class="mode-card-icon">🤖</div>
+                    <div class="mode-card-info">
+                        <div class="mode-card-title">Vs Computer</div>
+                        <div class="mode-card-desc">Single player against tactical smart AI bots</div>
+                    </div>
+                    <div class="mode-card-arrow">➔</div>
+                </div>
+            </div>
+        </main>
+
+        <!-- ================================================================== -->
+        <!-- SCREEN 2: GAMEPLAY SCREEN (Zero-Scroll with 4 Corner Docks)        -->
+        <!-- ================================================================== -->
+        <section class="screen" id="game-screen">
+            <!-- Top Players Bar (Red: Slot 0, Green: Slot 1) -->
+            <div class="players-bar top-bar">
+                <!-- Red Dock Card -->
+                <div class="player-dock-card red" id="dock-player-0">
+                    <div class="dock-left">
+                        <div class="dock-avatar red">R</div>
+                        <div class="dock-info">
+                            <div class="dock-name" id="name-player-0">Player 1</div>
+                            <div class="dock-progress-dots" id="dots-player-0">
+                                <div class="progress-dot"></div>
+                                <div class="progress-dot"></div>
+                                <div class="progress-dot"></div>
+                                <div class="progress-dot"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="dock-dice-slot" id="dock-dice-0"></div>
+                    <div class="turn-progress-line"></div>
+                </div>
+
+                <!-- Green Dock Card -->
+                <div class="player-dock-card green" id="dock-player-1">
+                    <div class="dock-left">
+                        <div class="dock-avatar green">G</div>
+                        <div class="dock-info">
+                            <div class="dock-name" id="name-player-1">Player 2</div>
+                            <div class="dock-progress-dots" id="dots-player-1">
+                                <div class="progress-dot"></div>
+                                <div class="progress-dot"></div>
+                                <div class="progress-dot"></div>
+                                <div class="progress-dot"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="dock-dice-slot" id="dock-dice-1"></div>
+                    <div class="turn-progress-line"></div>
+                </div>
+            </div>
+
+            <!-- Central Canvas & Floating Emoji Layer -->
+            <div class="board-area">
+                <canvas id="ludo-canvas"></canvas>
+                <div class="emoji-float-layer" id="emoji-layer"></div>
+            </div>
+
+            <!-- Bottom Players Bar (Blue: Slot 3, Yellow: Slot 2) -->
+            <div class="players-bar bottom-bar">
+                <!-- Blue Dock Card -->
+                <div class="player-dock-card blue" id="dock-player-3">
+                    <div class="dock-left">
+                        <div class="dock-avatar blue">B</div>
+                        <div class="dock-info">
+                            <div class="dock-name" id="name-player-3">Player 4</div>
+                            <div class="dock-progress-dots" id="dots-player-3">
+                                <div class="progress-dot"></div>
+                                <div class="progress-dot"></div>
+                                <div class="progress-dot"></div>
+                                <div class="progress-dot"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="dock-dice-slot" id="dock-dice-3"></div>
+                    <div class="turn-progress-line"></div>
+                </div>
+
+                <!-- Yellow Dock Card -->
+                <div class="player-dock-card yellow" id="dock-player-2">
+                    <div class="dock-left">
+                        <div class="dock-avatar yellow">Y</div>
+                        <div class="dock-info">
+                            <div class="dock-name" id="name-player-2">Player 3</div>
+                            <div class="dock-progress-dots" id="dots-player-2">
+                                <div class="progress-dot"></div>
+                                <div class="progress-dot"></div>
+                                <div class="progress-dot"></div>
+                                <div class="progress-dot"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="dock-dice-slot" id="dock-dice-2"></div>
+                    <div class="turn-progress-line"></div>
+                </div>
+            </div>
+
+            <!-- Bottom Control & Action Bar -->
+            <div class="game-controls-bar">
+                <!-- Tactile Dice & Turn Status Indicator -->
+                <div class="dice-action-area" id="dice-container" title="Click to Roll Dice">
+                    <div class="dice-tactile" id="active-dice-tactile" data-face="6">
+                        <div class="dice-pip"></div>
+                        <div class="dice-pip"></div>
+                        <div class="dice-pip"></div>
+                        <div class="dice-pip"></div>
+                        <div class="dice-pip"></div>
+                        <div class="dice-pip"></div>
+                    </div>
+                    <div class="turn-instruction">
+                        <div class="turn-player-title" id="turn-title">Red's Turn</div>
+                        <div class="turn-hint" id="turn-hint">Tap Dice to Roll</div>
+                    </div>
+                </div>
+
+                <!-- Floating Quick-Emoji Bar -->
+                <div class="quick-emoji-bar" id="quick-emoji-bar">
+                    <button class="emoji-btn" data-emoji="😂" title="Laugh">😂</button>
+                    <button class="emoji-btn" data-emoji="🔥" title="Fire">🔥</button>
+                    <button class="emoji-btn" data-emoji="👏" title="Applause">👏</button>
+                    <button class="emoji-btn" data-emoji="😭" title="Crying">😭</button>
+                    <button class="emoji-btn" data-emoji="⚡" title="Lightning">⚡</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================================================================== -->
+        <!-- MODALS & DIALOGS (Clean Matte Style)                               -->
+        <!-- ================================================================== -->
+
+        <!-- Modal: Online Lobby Options (Create / Join) -->
+        <div class="modal-overlay" id="modal-online-choice">
+            <div class="modal-dialog">
+                <div class="modal-header">
+                    <h2 class="modal-title">Play Online</h2>
+                    <button class="modal-close-btn">&times;</button>
+                </div>
+                <p style="color: var(--text-secondary); font-size: 13px; line-height: 1.5; margin-bottom: 16px;">
+                    Play with friends over the internet in real time with instant room code sync.
+                </p>
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <button class="btn-primary" id="btn-open-create-room">Create New Room</button>
+                    <button class="btn-secondary" id="btn-open-join-room">Join Existing Room</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal: Create Room -->
+        <div class="modal-overlay" id="modal-create-room">
+            <div class="modal-dialog">
+                <div class="modal-header">
+                    <h2 class="modal-title">Create Room</h2>
+                    <button class="modal-close-btn">&times;</button>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="create-player-name">Your Name</label>
+                    <input type="text" id="create-player-name" class="form-input" placeholder="e.g. Alex" maxlength="12" value="Host">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Number of Players</label>
+                    <div class="segmented-control" id="create-player-count">
+                        <button class="segment-btn active" data-count="2">2 Players</button>
+                        <button class="segment-btn" data-count="3">3 Players</button>
+                        <button class="segment-btn" data-count="4">4 Players</button>
+                    </div>
+                </div>
+                <button class="btn-primary" id="btn-submit-create-room">Generate Room &amp; Lobby</button>
+            </div>
+        </div>
+
+        <!-- Modal: Join Room -->
+        <div class="modal-overlay" id="modal-join-room">
+            <div class="modal-dialog">
+                <div class="modal-header">
+                    <h2 class="modal-title">Join Room</h2>
+                    <button class="modal-close-btn">&times;</button>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="join-room-code">6-Character Room Code</label>
+                    <input type="text" id="join-room-code" class="form-input" placeholder="e.g. LUDO42" maxlength="6" style="text-transform: uppercase; letter-spacing: 2px; font-weight: 700; font-family: monospace;">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="join-player-name">Your Name</label>
+                    <input type="text" id="join-player-name" class="form-input" placeholder="e.g. Sam" maxlength="12" value="Player">
+                </div>
+                <button class="btn-primary" id="btn-submit-join-room">Enter Room</button>
+            </div>
+        </div>
+
+        <!-- Modal: Waiting Lobby -->
+        <div class="modal-overlay" id="modal-waiting-lobby">
+            <div class="modal-dialog">
+                <div class="modal-header">
+                    <h2 class="modal-title">Match Lobby</h2>
+                    <button class="modal-close-btn" id="btn-leave-lobby">&times;</button>
+                </div>
+                <div class="room-code-badge">
+                    <div>
+                        <div style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Room Code</div>
+                        <div class="room-code-text" id="lobby-code-display">LUDO42</div>
+                    </div>
+                    <button class="icon-btn" id="btn-copy-code" title="Copy Code">📋</button>
+                </div>
+
+                <div class="lobby-slots-list" id="lobby-slots-container"></div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
+                    <button class="btn-secondary" id="btn-copy-link">🔗 Copy Link</button>
+                    <button class="btn-whatsapp" id="btn-whatsapp-invite">💬 WhatsApp</button>
+                </div>
+
+                <button class="btn-primary" id="btn-start-online-match" style="display: none;">Start Game</button>
+                <div id="lobby-waiting-notice" style="text-align: center; font-size: 12px; color: var(--text-secondary); margin-top: 6px;">
+                    Waiting for players to join...
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal: Pass & Play Setup -->
+        <div class="modal-overlay" id="modal-local-setup">
+            <div class="modal-dialog">
+                <div class="modal-header">
+                    <h2 class="modal-title">Pass &amp; Play Setup</h2>
+                    <button class="modal-close-btn">&times;</button>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Player Count</label>
+                    <div class="segmented-control" id="local-player-count">
+                        <button class="segment-btn" data-count="2">2 Players</button>
+                        <button class="segment-btn" data-count="3">3 Players</button>
+                        <button class="segment-btn active" data-count="4">4 Players</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Player Names</label>
+                    <div style="display: flex; flex-direction: column; gap: 8px;" id="local-names-inputs">
+                        <input type="text" class="form-input" id="pname-0" placeholder="Red Player" value="Player 1">
+                        <input type="text" class="form-input" id="pname-1" placeholder="Green Player" value="Player 2">
+                        <input type="text" class="form-input" id="pname-2" placeholder="Yellow Player" value="Player 3">
+                        <input type="text" class="form-input" id="pname-3" placeholder="Blue Player" value="Player 4">
+                    </div>
+                </div>
+                <button class="btn-primary" id="btn-start-local-game">Start Local Match</button>
+            </div>
+        </div>
+
+        <!-- Modal: Vs Computer Setup -->
+        <div class="modal-overlay" id="modal-ai-setup">
+            <div class="modal-dialog">
+                <div class="modal-header">
+                    <h2 class="modal-title">Vs Computer Match</h2>
+                    <button class="modal-close-btn">&times;</button>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="ai-human-name">Your Name</label>
+                    <input type="text" id="ai-human-name" class="form-input" placeholder="Your Name" value="You">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Match Format</label>
+                    <div class="segmented-control" id="ai-player-count">
+                        <button class="segment-btn active" data-count="2">1 vs 1 (Red vs Yellow)</button>
+                        <button class="segment-btn" data-count="4">1 vs 3 Bots (4 Players)</button>
+                    </div>
+                </div>
+                <button class="btn-primary" id="btn-start-ai-game">Launch Match</button>
+            </div>
+        </div>
+
+        <!-- Modal: Game Rules -->
+        <div class="modal-overlay" id="modal-rules">
+            <div class="modal-dialog">
+                <div class="modal-header">
+                    <h2 class="modal-title">Ludo Rules</h2>
+                    <button class="modal-close-btn">&times;</button>
+                </div>
+                <div style="font-size: 13px; line-height: 1.6; color: #CBD5E1; display: flex; flex-direction: column; gap: 10px;">
+                    <div>• <strong>Start:</strong> Roll a <strong>6</strong> to bring a pawn out of the base yard to your start tile.</div>
+                    <div>• <strong>Bonus Rolls:</strong> Rolling a <strong>6</strong>, capturing an opponent, or reaching home grants an immediate <strong>Bonus Roll</strong>.</div>
+                    <div>• <strong>3 Sixes Rule:</strong> Rolling 6 three consecutive times forfeits the roll and passes the turn.</div>
+                    <div>• <strong>Captures:</strong> Landing on an opponent’s pawn sends it back to base and awards a bonus turn.</div>
+                    <div>• <strong>8 Safe Zones:</strong> 4 colored starting squares + 4 Star squares (★) are safe zones where no captures can occur.</div>
+                    <div>• <strong>2-Player Mode:</strong> Players are positioned diagonally opposite (Red vs Yellow) for balanced play.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal: Victory Celebration -->
+        <div class="modal-overlay" id="modal-victory">
+            <div class="modal-dialog" style="text-align: center;">
+                <div style="font-size: 44px; margin-bottom: 4px;">🏆</div>
+                <h2 class="modal-title" style="font-size: 22px; color: #FFFFFF;">MATCH COMPLETED!</h2>
+                <p style="color: var(--text-secondary); font-size: 13px; margin-top: 2px;">Congratulations to the winners!</p>
+
+                <div class="victory-podium" id="victory-podium-container"></div>
+
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 16px;">
+                    <button class="btn-primary" id="btn-play-again">Play Again</button>
+                    <button class="btn-secondary" id="btn-victory-home">Main Menu</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Application Initialization Script -->
+    <script type="module">
+        import { LudoGame, PLAYER_COLORS } from './game.js';
+        import { audio } from './audio.js';
+        import { network } from './network.js';
+
+        const canvas = document.getElementById('ludo-canvas');
+        const homeScreen = document.getElementById('home-screen');
+        const gameScreen = document.getElementById('game-screen');
+        const toastContainer = document.getElementById('toast-container');
+        const audioToggleBtn = document.getElementById('audio-toggle-btn');
+        const exitMatchBtn = document.getElementById('exit-match-btn');
+        const brandHomeBtn = document.getElementById('brand-home-btn');
+        const rulesBtn = document.getElementById('rules-btn');
+        const headerRoomPill = document.getElementById('header-room-pill');
+        const headerRoomCode = document.getElementById('header-room-code');
+
+        const activeDiceTactile = document.getElementById('active-dice-tactile');
+        const diceContainer = document.getElementById('dice-container');
+        const turnTitle = document.getElementById('turn-title');
+        const turnHint = document.getElementById('turn-hint');
+        const emojiLayer = document.getElementById('emoji-layer');
+
+        // Modals
+        const modalOnlineChoice = document.getElementById('modal-online-choice');
+        const modalCreateRoom = document.getElementById('modal-create-room');
+        const modalJoinRoom = document.getElementById('modal-join-room');
+        const modalWaitingLobby = document.getElementById('modal-waiting-lobby');
+        const modalLocalSetup = document.getElementById('modal-local-setup');
+        const modalAiSetup = document.getElementById('modal-ai-setup');
+        const modalRules = document.getElementById('modal-rules');
+        const modalVictory = document.getElementById('modal-victory');
+
+        let gameInstance = null;
+
+        // UI Toast Notification Helper
+        function showToast(message, type = 'normal') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(-8px)';
+                toast.style.transition = 'all 0.2s ease';
+                setTimeout(() => toast.remove(), 220);
+            }, 2400);
+        }
+
+        // Sound Mute Toggle
+        function updateAudioButton() {
+            audioToggleBtn.textContent = audio.getMuted() ? '🔇' : '🔊';
+        }
+        updateAudioButton();
+        audioToggleBtn.addEventListener('click', () => {
+            const isMuted = audio.toggleMute();
+            updateAudioButton();
+            showToast(isMuted ? 'Sound Muted' : 'Sound Enabled');
+        });
+
+        // Initialize Game
+        gameInstance = new LudoGame(canvas, {
+            showToast: (msg, type) => showToast(msg, type),
+            onStateChange: (state) => handleGameStateChange(state),
+            onGameOver: (podium) => handleGameOver(podium)
+        });
+
+        // Update Dice Widget Face Pips
+        function setDiceFace(val) {
+            activeDiceTactile.setAttribute('data-face', val);
+            activeDiceTactile.innerHTML = '';
+            for (let i = 0; i < val; i++) {
+                const pip = document.createElement('div');
+                pip.className = 'dice-pip';
+                activeDiceTactile.appendChild(pip);
+            }
+        }
+
+        // Handle Game State Changes
+        function handleGameStateChange(state) {
+            const player = state.currentPlayer;
+            const slot = state.currentSlot;
+            const color = PLAYER_COLORS[slot];
+
+            setDiceFace(state.diceValue);
+
+            if (state.isRolling) {
+                activeDiceTactile.classList.add('rolling');
+            } else {
+                activeDiceTactile.classList.remove('rolling');
+            }
+
+            // Update 4 Player Dock Cards Around Board
+            [0, 1, 2, 3].forEach(s => {
+                const dock = document.getElementById(`dock-player-${s}`);
+                if (!dock) return;
+
+                if (!state.activeSlots.includes(s)) {
+                    dock.style.display = 'none';
+                } else {
+                    dock.style.display = 'flex';
+                    if (s === slot) {
+                        dock.classList.add('active-turn');
+                        // Restart countdown animation
+                        const line = dock.querySelector('.turn-progress-line');
+                        if (line) {
+                            line.style.animation = 'none';
+                            line.offsetHeight; // trigger reflow
+                            line.style.animation = 'turnCountdown 14s linear forwards';
+                        }
+                    } else {
+                        dock.classList.remove('active-turn');
+                    }
+
+                    const p = state.players[s];
+                    document.getElementById(`name-player-${s}`).textContent = p.name;
+
+                    // Update 4 Mini Progress Dots (tokens in home)
+                    const dotsContainer = document.getElementById(`dots-player-${s}`);
+                    if (dotsContainer) {
+                        const dots = dotsContainer.querySelectorAll('.progress-dot');
+                        const homeCount = p.tokens.filter(t => t === 56).length;
+                        dots.forEach((dot, dIdx) => {
+                            dot.className = 'progress-dot';
+                            if (dIdx < homeCount) {
+                                dot.classList.add('filled', PLAYER_COLORS[s].name.toLowerCase());
+                            }
+                        });
+                    }
+                }
+            });
+
+            // Turn Instructions
+            turnTitle.textContent = `${player.name}'s Turn`;
+            turnTitle.style.color = color.hex;
+
+            if (state.waitingForRoll) {
+                turnHint.textContent = player.isAI ? 'Bot is rolling...' : 'Tap Dice to Roll!';
+            } else {
+                turnHint.textContent = 'Select a pawn to move';
+            }
+        }
+
+        diceContainer.addEventListener('click', () => {
+            gameInstance.rollDice();
+        });
+
+        // Floating Quick Emojis
+        document.querySelectorAll('.emoji-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const emoji = btn.getAttribute('data-emoji');
+                audio.playEmoji();
+
+                if (gameInstance.mode === 'online') {
+                    network.sendEmoji(emoji);
+                }
+                triggerFloatingEmoji(emoji, gameInstance.getCurrentSlot());
+            });
+        });
+
+        function triggerFloatingEmoji(emojiChar, slot) {
+            const dock = document.getElementById(`dock-player-${slot}`);
+            if (!dock) return;
+
+            const rect = dock.getBoundingClientRect();
+            const bubble = document.createElement('div');
+            bubble.className = 'floating-bubble';
+            bubble.textContent = emojiChar;
+            bubble.style.left = `${rect.left + rect.width / 2 - 22}px`;
+            bubble.style.top = `${rect.top}px`;
+            emojiLayer.appendChild(bubble);
+
+            setTimeout(() => bubble.remove(), 2000);
+        }
+
+        network.onReactionReceived = (reaction) => {
+            audio.playEmoji();
+            triggerFloatingEmoji(reaction.emoji, reaction.senderSlot);
+        };
+
+        // Header Room Pill Click to Copy
+        headerRoomPill.addEventListener('click', () => {
+            const code = headerRoomCode.textContent;
+            if (code && code !== '------') {
+                navigator.clipboard.writeText(code).then(() => {
+                    showToast("Room code copied: " + code);
+                });
+            }
+        });
+
+        // Modal Helpers
+        function openModal(modal) { modal.classList.add('active'); }
+        function closeModal(modal) { modal.classList.remove('active'); }
+
+        document.querySelectorAll('.modal-close-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const modal = btn.closest('.modal-overlay');
+                if (modal) closeModal(modal);
+            });
+        });
+
+        function showGameScreen(roomCode = null) {
+            homeScreen.classList.remove('active');
+            gameScreen.classList.add('active');
+            exitMatchBtn.style.display = 'flex';
+
+            if (roomCode) {
+                headerRoomCode.textContent = roomCode;
+                headerRoomPill.classList.add('visible');
+            } else {
+                headerRoomPill.classList.remove('visible');
+            }
+
+            setTimeout(() => gameInstance.resize(), 50);
+        }
+
+        function showHomeScreen() {
+            gameScreen.classList.remove('active');
+            homeScreen.classList.add('active');
+            exitMatchBtn.style.display = 'none';
+            headerRoomPill.classList.remove('visible');
+        }
+
+        brandHomeBtn.addEventListener('click', () => {
+            if (confirm("Return to main menu? Current match progress will be lost.")) {
+                if (gameInstance.mode === 'online') network.leaveRoom();
+                showHomeScreen();
+            }
+        });
+
+        exitMatchBtn.addEventListener('click', () => {
+            if (confirm("Exit current match and return to home screen?")) {
+                if (gameInstance.mode === 'online') network.leaveRoom();
+                showHomeScreen();
+            }
+        });
+
+        rulesBtn.addEventListener('click', () => openModal(modalRules));
+
+        // ====================================================================
+        // PASS & PLAY SETUP
+        // ====================================================================
+        document.getElementById('card-pass-play').addEventListener('click', () => {
+            audio.playClick();
+            openModal(modalLocalSetup);
+        });
+
+        let localSelectedCount = 4;
+        const localCountButtons = document.querySelectorAll('#local-player-count .segment-btn');
+        localCountButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                localCountButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                localSelectedCount = Number(btn.getAttribute('data-count'));
+
+                document.getElementById('pname-1').style.display = localSelectedCount >= 3 ? 'block' : 'none';
+                document.getElementById('pname-3').style.display = localSelectedCount >= 4 ? 'block' : 'none';
+            });
+        });
+
+        document.getElementById('btn-start-local-game').addEventListener('click', () => {
+            audio.playClick();
+            closeModal(modalLocalSetup);
+
+            const names = {
+                0: document.getElementById('pname-0').value.trim() || 'Red',
+                1: document.getElementById('pname-1').value.trim() || 'Green',
+                2: document.getElementById('pname-2').value.trim() || 'Yellow',
+                3: document.getElementById('pname-3').value.trim() || 'Blue'
+            };
+
+            showGameScreen();
+            gameInstance.startMatch('local', localSelectedCount, names, []);
+            showToast("Local Match Started! Red rolls first.");
+        });
+
+        // ====================================================================
+        // VS COMPUTER SETUP
+        // ====================================================================
+        document.getElementById('card-vs-ai').addEventListener('click', () => {
+            audio.playClick();
+            openModal(modalAiSetup);
+        });
+
+        let aiMatchCount = 2;
+        const aiCountButtons = document.querySelectorAll('#ai-player-count .segment-btn');
+        aiCountButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                aiCountButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                aiMatchCount = Number(btn.getAttribute('data-count'));
+            });
+        });
+
+        document.getElementById('btn-start-ai-game').addEventListener('click', () => {
+            audio.playClick();
+            closeModal(modalAiSetup);
+
+            const humanName = document.getElementById('ai-human-name').value.trim() || 'You';
+            const names = { 0: humanName };
+            const aiSlots = (aiMatchCount === 2) ? [2] : [1, 2, 3];
+
+            showGameScreen();
+            gameInstance.startMatch('ai', aiMatchCount, names, aiSlots);
+            showToast("Match vs Smart AI Started!");
+        });
+
+        // ====================================================================
+        // ONLINE MULTIPLAYER (Firebase Realtime Database)
+        // ====================================================================
+        document.getElementById('card-play-online').addEventListener('click', () => {
+            audio.playClick();
+            openModal(modalOnlineChoice);
+        });
+
+        document.getElementById('btn-open-create-room').addEventListener('click', () => {
+            closeModal(modalOnlineChoice);
+            openModal(modalCreateRoom);
+        });
+
+        document.getElementById('btn-open-join-room').addEventListener('click', () => {
+            closeModal(modalOnlineChoice);
+            openModal(modalJoinRoom);
+        });
+
+        let onlineCreateCount = 4;
+        const createCountButtons = document.querySelectorAll('#create-player-count .segment-btn');
+        createCountButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                createCountButtons.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                onlineCreateCount = Number(btn.getAttribute('data-count'));
+            });
+        });
+
+        document.getElementById('btn-submit-create-room').addEventListener('click', async () => {
+            const hostName = document.getElementById('create-player-name').value.trim() || 'Host';
+            try {
+                const roomCode = await network.createRoom(hostName, onlineCreateCount);
+                closeModal(modalCreateRoom);
+                openWaitingLobby(roomCode);
+            } catch (err) {
+                if (err.message === 'FIREBASE_NOT_CONFIGURED') {
+                    alert("Firebase Realtime DB keys are not yet configured in network.js!\n\nPlease add your free Firebase config in network.js to play online.\n\nOffline Pass & Play and AI modes work 100% without any setup!");
+                } else {
+                    alert("Failed to create room: " + err.message);
+                }
+            }
+        });
+
+        document.getElementById('btn-submit-join-room').addEventListener('click', async () => {
+            const roomCode = document.getElementById('join-room-code').value.trim().toUpperCase();
+            const playerName = document.getElementById('join-player-name').value.trim() || 'Player';
+
+            if (!roomCode || roomCode.length !== 6) {
+                alert("Please enter a valid 6-character room code.");
+                return;
+            }
+
+            try {
+                await network.joinRoom(roomCode, playerName);
+                closeModal(modalJoinRoom);
+                openWaitingLobby(roomCode);
+            } catch (err) {
+                if (err.message === 'FIREBASE_NOT_CONFIGURED') {
+                    alert("Firebase Realtime DB keys are not yet configured in network.js!\n\nPlease add your free Firebase config in network.js to play online.\n\nOffline Pass & Play and AI modes work 100% without any setup!");
+                } else if (err.message === 'ROOM_NOT_FOUND') {
+                    alert("Room not found. Please double-check the 6-character code.");
+                } else if (err.message === 'ROOM_FULL') {
+                    alert("This room is already full.");
+                } else {
+                    alert("Failed to join room: " + err.message);
+                }
+            }
+        });
+
+        function openWaitingLobby(code) {
+            document.getElementById('lobby-code-display').textContent = code;
+            openModal(modalWaitingLobby);
+        }
+
+        document.getElementById('btn-copy-code').addEventListener('click', () => {
+            const code = document.getElementById('lobby-code-display').textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                showToast("Room code copied: " + code);
+            });
+        });
+
+        document.getElementById('btn-copy-link').addEventListener('click', () => {
+            const code = document.getElementById('lobby-code-display').textContent;
+            const link = `${window.location.origin}${window.location.pathname}?room=${code}`;
+            navigator.clipboard.writeText(link).then(() => {
+                showToast("Invite link copied to clipboard!");
+            });
+        });
+
+        document.getElementById('btn-whatsapp-invite').addEventListener('click', () => {
+            const code = document.getElementById('lobby-code-display').textContent;
+            const link = `${window.location.origin}${window.location.pathname}?room=${code}`;
+            const text = encodeURIComponent(`🎲 Hey! Play Genius Ludo with me! Join Room ${code}:\n${link}`);
+            window.open(`https://api.whatsapp.com/send?text=${text}`, '_blank');
+        });
+
+        document.getElementById('btn-leave-lobby').addEventListener('click', () => {
+            network.leaveRoom();
+            closeModal(modalWaitingLobby);
+        });
+
+        network.onRoomStateChange = (roomData) => {
+            if (!roomData || roomData.deleted) {
+                showToast("Room was closed by host.", "danger");
+                closeModal(modalWaitingLobby);
+                showHomeScreen();
+                return;
+            }
+
+            renderLobbySlots(roomData);
+
+            if (roomData.status === 'playing' && modalWaitingLobby.classList.contains('active')) {
+                closeModal(modalWaitingLobby);
+                showGameScreen(roomData.code);
+
+                const playerNames = {};
+                const playersMap = roomData.players || {};
+                Object.values(playersMap).forEach(p => {
+                    playerNames[p.slot] = p.name;
+                });
+
+                gameInstance.startMatch('online', roomData.maxPlayers, playerNames, []);
+                showToast("Online Match Started!");
+            }
+        };
+
+        function renderLobbySlots(roomData) {
+            const container = document.getElementById('lobby-slots-container');
+            container.innerHTML = '';
+            const players = Object.values(roomData.players || {});
+            const max = roomData.maxPlayers || 4;
+
+            for (let i = 0; i < max; i++) {
+                let slot = i;
+                if (max === 2) slot = (i === 0 ? 0 : 2);
+
+                const color = PLAYER_COLORS[slot];
+                const matchedPlayer = players.find(p => p.slot === slot);
+
+                const item = document.createElement('div');
+                item.className = 'lobby-slot-item';
+
+                const left = document.createElement('div');
+                left.className = 'lobby-slot-left';
+
+                const dot = document.createElement('div');
+                dot.className = 'lobby-token-dot';
+                dot.style.background = color.hex;
+                left.appendChild(dot);
+
+                const nameEl = document.createElement('div');
+                nameEl.className = 'lobby-slot-name';
+                nameEl.textContent = matchedPlayer ? `${matchedPlayer.name} ${matchedPlayer.isHost ? '(Host)' : ''}` : `Waiting for player...`;
+                if (!matchedPlayer) nameEl.style.color = 'var(--text-dim)';
+                left.appendChild(nameEl);
+
+                item.appendChild(left);
+
+                const statusEl = document.createElement('div');
+                statusEl.className = 'lobby-slot-status';
+                statusEl.textContent = matchedPlayer ? (matchedPlayer.online ? 'Ready' : 'Offline') : 'Open Slot';
+                item.appendChild(statusEl);
+
+                container.appendChild(item);
+            }
+
+            const startBtn = document.getElementById('btn-start-online-match');
+            const notice = document.getElementById('lobby-waiting-notice');
+
+            if (network.isHost) {
+                startBtn.style.display = 'block';
+                const canStart = players.length >= 2;
+                startBtn.disabled = !canStart;
+                startBtn.style.opacity = canStart ? '1' : '0.5';
+                notice.textContent = canStart ? "All ready! Click Start Game." : `Need at least 2 players to start (${players.length}/${max}).`;
+            } else {
+                startBtn.style.display = 'none';
+                notice.textContent = "Waiting for host to start match...";
+            }
+        }
+
+        document.getElementById('btn-start-online-match').addEventListener('click', () => {
+            network.startGame({ started: true });
+        });
+
+        // ====================================================================
+        // VICTORY & PODIUM
+        // ====================================================================
+        function handleGameOver(podium) {
+            const container = document.getElementById('victory-podium-container');
+            container.innerHTML = '';
+
+            const order = ['2nd', '1st', '3rd'];
+            const podiumMap = {
+                '1st': podium.find(p => p.rank === 1),
+                '2nd': podium.find(p => p.rank === 2),
+                '3rd': podium.find(p => p.rank === 3)
+            };
+
+            order.forEach(place => {
+                const p = podiumMap[place];
+                if (!p) return;
+
+                const col = document.createElement('div');
+                col.className = `podium-col podium-${place}`;
+
+                const avatar = document.createElement('div');
+                avatar.className = 'podium-avatar';
+                avatar.style.background = p.color.hex;
+                avatar.textContent = p.name.charAt(0).toUpperCase();
+                col.appendChild(avatar);
+
+                const name = document.createElement('div');
+                name.className = 'podium-player-name';
+                name.textContent = p.name;
+                col.appendChild(name);
+
+                const step = document.createElement('div');
+                step.className = 'podium-step';
+                step.innerHTML = `<span class="podium-rank-num">${place}</span>`;
+                col.appendChild(step);
+
+                container.appendChild(col);
+            });
+
+            openModal(modalVictory);
+        }
+
+        document.getElementById('btn-play-again').addEventListener('click', () => {
+            closeModal(modalVictory);
+            if (gameInstance.mode === 'online') {
+                showHomeScreen();
+            } else {
+                gameInstance.startMatch(gameInstance.mode, gameInstance.playerCount, {}, []);
+            }
+        });
+
+        document.getElementById('btn-victory-home').addEventListener('click', () => {
+            closeModal(modalVictory);
+            showHomeScreen();
+        });
+
+        // URL Query Param Auto-Fill (?room=LUDO42)
+        const urlParams = new URLSearchParams(window.location.search);
+        const autoRoom = urlParams.get('room');
+        if (autoRoom && autoRoom.trim().length === 6) {
+            document.getElementById('join-room-code').value = autoRoom.trim().toUpperCase();
+            openModal(modalJoinRoom);
+        }
+    </script>
+</body>
+</html>
